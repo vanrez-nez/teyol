@@ -14,7 +14,7 @@ import { DynamicBorder } from "./dynamic-border.js";
 export type AuthSelectorProvider = {
 	id: string;
 	name: string;
-	authType: "oauth" | "api_key";
+	authType: "oauth" | "api_key" | "self_hosted";
 };
 
 /**
@@ -155,7 +155,7 @@ export class OAuthSelectorComponent extends Container implements Focusable {
 			const label = credential.type === "oauth" ? "subscription configured" : "API key configured";
 			return theme.fg("muted", " • ") + theme.fg("warning", label);
 		}
-		if (provider.authType !== "api_key") return theme.fg("muted", " • unconfigured");
+		if (provider.authType === "oauth") return theme.fg("muted", " • unconfigured");
 
 		const status = this.getAuthStatus(provider.id);
 		switch (status.source) {
@@ -169,6 +169,8 @@ export class OAuthSelectorComponent extends Container implements Focusable {
 				return theme.fg("success", " ✓ key in models.json");
 			case "models_json_command":
 				return theme.fg("success", " ✓ command in models.json");
+			case "self_hosted":
+				return theme.fg("success", " ✓ self-hosted");
 			default:
 				return theme.fg("muted", " • unconfigured");
 		}

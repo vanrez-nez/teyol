@@ -11,7 +11,9 @@ import fs from "fs";
 import type { AgentMessage } from "#agent/index.js";
 import {
   type AssistantMessage,
+  getProviderMetadata,
   getProviders,
+  getSelfHostedProviderDefaultBaseUrl,
   type ImageContent,
   type Message,
   type Model,
@@ -4071,7 +4073,7 @@ export class InteractiveMode {
     }
   }
 
-  private getLoginProviderOptions(authType?: "oauth" | "api_key"): AuthSelectorProvider[] {
+  private getLoginProviderOptions(authType?: "oauth" | "api_key" | "self_hosted"): AuthSelectorProvider[] {
     const authStorage = this.session.modelRegistry.authStorage;
     const oauthProviders = authStorage.getOAuthProviders();
     const oauthProviderIds = new Set(oauthProviders.map((provider) => provider.id));
@@ -4090,6 +4092,17 @@ export class InteractiveMode {
         id: providerId,
         name: this.session.modelRegistry.getProviderDisplayName(providerId),
         authType: "api_key",
+      });
+    }
+
+    for (const providerId of getProviders()) {
+      const metadata = getProviderMetadata(providerId);
+      if (!metadata?.auth?.selfHosted) continue;
+      if (options.some((option) => option.id === providerId && option.authType === "self_hosted")) continue;
+      options.push({
+        id: providerId,
+        name: this.session.modelRegistry.getProviderDisplayName(providerId),
+        authType: "self_hosted",
       });
     }
 
@@ -4119,13 +4132,14 @@ export class InteractiveMode {
   private showLoginAuthTypeSelector(): void {
     const subscriptionLabel = "Use a subscription";
     const apiKeyLabel = "Use an API key";
+    const selfHostedLabel = "Use a self-hosted provider";
     this.showSelector((done) => {
       const selector = new ExtensionSelectorComponent(
         "Select authentication method:",
-        [subscriptionLabel, apiKeyLabel],
+        [subscriptionLabel, apiKeyLabel, selfHostedLabel],
         (option) => {
           done();
-          const authType = option === subscriptionLabel ? "oauth" : "api_key";
+          const authType = option === subscriptionLabel ? "oauth" : option === apiKeyLabel ? "api_key" : "self_hosted";
           this.showLoginProviderSelector(authType);
         },
         () => {
@@ -4137,12 +4151,16 @@ export class InteractiveMode {
     });
   }
 
-  private showLoginProviderSelector(authType: "oauth" | "api_key"): void {
+  private showLoginProviderSelector(authType: "oauth" | "api_key" | "self_hosted"): void {
     const providerOptions = this.getLoginProviderOptions(authType);
     if (providerOptions.length === 0) {
-      this.showStatus(
-        authType === "oauth" ? "No subscription providers available." : "No API key providers available.",
-      );
+      const noProvidersMessage =
+        authType === "oauth"
+          ? "No subscription providers available."
+          : authType === "api_key"
+            ? "No API key providers available."
+            : "No self-hosted providers available.";
+      this.showStatus(noProvidersMessage);
       return;
     }
 
@@ -4161,8 +4179,10 @@ export class InteractiveMode {
 
           if (providerOption.authType === "oauth") {
             await this.showLoginDialog(providerOption.id, providerOption.name);
-          } else {
+          } else if (providerOption.authType === "api_key") {
             await this.showApiKeyLoginDialog(providerOption.id, providerOption.name);
+          } else {
+            await this.showSelfHostedProviderDialog(providerOption.id, providerOption.name);
           }
         },
         () => {
@@ -4206,11 +4226,14 @@ export class InteractiveMode {
             this.session.modelRegistry.authStorage.logout(providerOption.id);
             this.session.modelRegistry.refresh();
             await this.session.modelRegistry.refreshDynamic();
+            await this.session.revalidateSelectedModel();
             await this.updateAvailableProviderCount();
             const message =
               providerOption.authType === "oauth"
                 ? `Logged out of ${providerOption.name}`
                 : `Removed stored API key for ${providerOption.name}. Environment variables and models.json config are unchanged.`;
+            this.footer.invalidate();
+            this.updateEditorBorderColor();
             this.showStatus(message);
           } catch (error: unknown) {
             this.showError(`Logout failed: ${error instanceof Error ? error.message : String(error)}`);
@@ -4314,6 +4337,72 @@ export class InteractiveMode {
       const errorMsg = error instanceof Error ? error.message : String(error);
       if (errorMsg !== "Login cancelled") {
         this.showError(`Failed to save API key for ${providerName}: ${errorMsg}`);
+      }
+    }
+  }
+
+  private async showSelfHostedProviderDialog(providerId: string, providerName: string): Promise<void> {
+    const previousModel = this.session.model;
+    const defaultBaseUrl =
+      process.env[`${providerId.toUpperCase()}_HOST`]?.trim() ||
+      getSelfHostedProviderDefaultBaseUrl(providerId) ||
+      "http://localhost:11434";
+
+    const dialog = new LoginDialogComponent(
+      this.ui,
+      providerId,
+      (_success, _message) => {
+        // Completion handled below
+      },
+      providerName,
+      `Configure self-hosted ${providerName}`,
+    );
+
+    this.editorContainer.clear();
+    this.editorContainer.addChild(dialog);
+    this.ui.setFocus(dialog);
+    this.ui.requestRender();
+
+    const restoreEditor = () => {
+      this.editorContainer.clear();
+      this.editorContainer.addChild(this.editor);
+      this.ui.setFocus(this.editor);
+      this.ui.requestRender();
+    };
+
+    try {
+      const enteredBaseUrl = (await dialog.showPrompt("Enter base URL:", defaultBaseUrl)).trim();
+      const baseUrl = enteredBaseUrl || defaultBaseUrl;
+
+      this.session.modelRegistry.configureProviderBaseUrl(providerId, baseUrl);
+      await this.session.modelRegistry.refreshDynamic();
+
+      const providerModels = this.session.modelRegistry.getAvailable().filter((model) => model.provider === providerId);
+      if (providerModels.length === 0) {
+        const loadError = this.session.modelRegistry.getError();
+        throw new Error(loadError || `No models discovered for ${providerName}.`);
+      }
+
+      let selectedModel: Model<any> | undefined;
+      if (isUnknownModel(previousModel)) {
+        selectedModel = providerModels[0];
+        await this.session.setModel(selectedModel);
+      }
+
+      restoreEditor();
+      await this.updateAvailableProviderCount();
+      this.footer.invalidate();
+      this.updateEditorBorderColor();
+      this.showStatus(
+        selectedModel
+          ? `Configured self-hosted ${providerName}. Selected ${selectedModel.id}.`
+          : `Configured self-hosted ${providerName}.`,
+      );
+    } catch (error: unknown) {
+      restoreEditor();
+      const errorMsg = error instanceof Error ? error.message : String(error);
+      if (errorMsg !== "Login cancelled") {
+        this.showError(`Failed to configure self-hosted ${providerName}: ${errorMsg}`);
       }
     }
   }

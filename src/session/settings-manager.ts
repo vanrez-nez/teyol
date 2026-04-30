@@ -613,6 +613,14 @@ export class SettingsManager {
 		this.save();
 	}
 
+	clearDefaultModelAndProvider(): void {
+		delete this.globalSettings.defaultProvider;
+		delete this.globalSettings.defaultModel;
+		this.markModified("defaultProvider");
+		this.markModified("defaultModel");
+		this.save();
+	}
+
 	getSteeringMode(): "all" | "one-at-a-time" {
 		return this.settings.steeringMode || "one-at-a-time";
 	}

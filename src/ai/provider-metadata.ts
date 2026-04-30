@@ -10,7 +10,10 @@ export const BUILT_IN_PROVIDER_METADATA: Record<KnownProvider, ProviderMetadata>
       apiKeyEnvVars: ["OLLAMA_API_KEY"],
       authRequired: true,
       localHostnames: ["localhost", "127.0.0.1", "::1"],
-      localApiKey: "ollama",
+      selfHosted: {
+        defaultBaseUrl: "http://localhost:11434",
+        cloudBaseUrls: ["https://api.ollama.com/api", "https://ollama.com/api"],
+      },
     },
     discovery: { type: "ollama" },
   },
@@ -62,4 +65,22 @@ export function isLocalProviderBaseUrl(provider: string, baseUrl: string): boole
   } catch {
     return false;
   }
+}
+
+export function isProviderBaseUrlNoAuth(provider: string, baseUrl: string): boolean {
+  const metadata = getProviderMetadata(provider);
+  const auth = metadata?.auth;
+  if (!auth) return false;
+  if (auth.authRequired === false) return true;
+  if (isLocalProviderBaseUrl(provider, baseUrl)) return true;
+  if (!auth.selfHosted) return false;
+
+  const normalized = normalizeProviderBaseUrl(provider, baseUrl);
+  const cloudBaseUrls = auth.selfHosted.cloudBaseUrls ?? [];
+  return !cloudBaseUrls.some((cloudBaseUrl) => normalizeProviderBaseUrl(provider, cloudBaseUrl) === normalized);
+}
+
+export function getSelfHostedProviderDefaultBaseUrl(provider: string): string | undefined {
+  const metadata = getProviderMetadata(provider);
+  return metadata?.auth?.selfHosted?.defaultBaseUrl;
 }

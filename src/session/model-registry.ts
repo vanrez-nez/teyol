@@ -5,8 +5,8 @@
 import { type Static, Type } from "@sinclair/typebox";
 import { TypeCompiler } from "@sinclair/typebox/compiler";
 import type { ValueError } from "@sinclair/typebox/errors";
-import { existsSync, readFileSync } from "fs";
-import { join } from "path";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
+import { dirname, join } from "path";
 import {
   type Api,
   type AssistantMessageEventStream,
@@ -14,7 +14,7 @@ import {
   getModels,
   getProviderMetadata,
   getProviders,
-  isLocalProviderBaseUrl,
+  isProviderBaseUrlNoAuth,
   type KnownProvider,
   type Model,
   type OAuthProviderInterface,
@@ -346,6 +346,44 @@ export class ModelRegistry {
     return this.loadError;
   }
 
+  configureProviderBaseUrl(provider: string, baseUrl: string): void {
+    if (!this.modelsJsonPath) {
+      throw new Error("models.json is not available for this model registry.");
+    }
+
+    const resolvedBaseUrl = resolveProviderBaseUrl(provider, baseUrl);
+    if (!resolvedBaseUrl) {
+      throw new Error(`Provider ${provider}: unable to resolve baseUrl.`);
+    }
+
+    let config: ModelsConfig = { providers: {} };
+    if (existsSync(this.modelsJsonPath)) {
+      try {
+        config = JSON.parse(readFileSync(this.modelsJsonPath, "utf-8")) as ModelsConfig;
+      } catch (error) {
+        throw new Error(`Failed to parse models.json: ${error instanceof Error ? error.message : String(error)}`);
+      }
+    }
+
+    config.providers ??= {};
+    config.providers[provider] = {
+      ...(config.providers[provider] ?? {}),
+      baseUrl: resolvedBaseUrl,
+    };
+
+    if (!validateModelsConfig.Check(config)) {
+      const errors =
+        Array.from(validateModelsConfig.Errors(config))
+          .map((error: any) => `  - ${formatValidationPath(error)}: ${error.message}`)
+          .join("\n") || "Unknown schema error";
+      throw new Error(`Invalid models.json schema after update:\n${errors}`);
+    }
+
+    mkdirSync(dirname(this.modelsJsonPath), { recursive: true, mode: 0o700 });
+    writeFileSync(this.modelsJsonPath, `${JSON.stringify(config, null, 2)}\n`, "utf-8");
+    this.refresh();
+  }
+
   private loadModels(): void {
     // Load custom models and overrides from models.json
     const {
@@ -404,7 +442,7 @@ export class ModelRegistry {
           };
         }
 
-        if (metadata?.discovery?.type === "ollama" && !isLocalProviderBaseUrl(provider, model.baseUrl)) {
+        if (metadata?.discovery?.type === "ollama") {
           return [];
         }
 
@@ -725,7 +763,7 @@ export class ModelRegistry {
   }
 
   private async getDiscoveryHeaders(provider: string, baseUrl: string): Promise<Record<string, string>> {
-    if (isLocalProviderBaseUrl(provider, baseUrl)) return {};
+    if (isProviderBaseUrlNoAuth(provider, baseUrl)) return {};
     const apiKey = await this.getApiKeyForProvider(provider);
     return apiKey ? { Authorization: `Bearer ${apiKey}` } : {};
   }
@@ -758,7 +796,7 @@ export class ModelRegistry {
    */
   hasConfiguredAuth(model: Model<Api>): boolean {
     const metadata = getProviderMetadata(model.provider);
-    if (metadata?.auth && isLocalProviderBaseUrl(model.provider, model.baseUrl)) return true;
+    if (metadata?.auth && isProviderBaseUrlNoAuth(model.provider, model.baseUrl)) return true;
     if (metadata?.auth?.authRequired === false) return true;
     return (
       this.authStorage.hasAuth(model.provider) || this.providerRequestConfigs.get(model.provider)?.apiKey !== undefined
@@ -803,14 +841,16 @@ export class ModelRegistry {
   async getApiKeyAndHeaders(model: Model<Api>): Promise<ResolvedRequestAuth> {
     try {
       const providerConfig = this.providerRequestConfigs.get(model.provider);
-      const apiKeyFromAuthStorage = await this.authStorage.getApiKey(model.provider, { includeFallback: false });
-      const metadata = getProviderMetadata(model.provider);
-      const apiKey =
-        apiKeyFromAuthStorage ??
-        (providerConfig?.apiKey
-          ? resolveConfigValueOrThrow(providerConfig.apiKey, `API key for provider "${model.provider}"`)
-          : undefined) ??
-        (isLocalProviderBaseUrl(model.provider, model.baseUrl) ? metadata?.auth?.localApiKey : undefined);
+      const noAuthBaseUrl = isProviderBaseUrlNoAuth(model.provider, model.baseUrl);
+      const apiKeyFromAuthStorage = noAuthBaseUrl
+        ? undefined
+        : await this.authStorage.getApiKey(model.provider, { includeFallback: false });
+      const apiKey = noAuthBaseUrl
+        ? undefined
+        : apiKeyFromAuthStorage ??
+          (providerConfig?.apiKey
+            ? resolveConfigValueOrThrow(providerConfig.apiKey, `API key for provider "${model.provider}"`)
+            : undefined);
 
       const providerHeaders = resolveHeadersOrThrow(providerConfig?.headers, `provider "${model.provider}"`);
       const modelHeaders = resolveHeadersOrThrow(
@@ -851,6 +891,12 @@ export class ModelRegistry {
     const authStatus = this.authStorage.getAuthStatus(provider);
     if (authStatus.source) {
       return authStatus;
+    }
+
+    const providerOverride = this.discoveryContext.overrides.get(provider);
+    const resolvedBaseUrl = resolveProviderBaseUrl(provider, providerOverride?.baseUrl);
+    if (resolvedBaseUrl && isProviderBaseUrlNoAuth(provider, resolvedBaseUrl)) {
+      return { configured: true, source: "self_hosted", label: resolvedBaseUrl };
     }
 
     const providerApiKey = this.providerRequestConfigs.get(provider)?.apiKey;

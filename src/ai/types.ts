@@ -377,6 +377,10 @@ export interface ProviderAuthConfig {
   authRequired?: boolean;
   localHostnames?: string[];
   localApiKey?: string;
+  selfHosted?: {
+    defaultBaseUrl: string;
+    cloudBaseUrls?: string[];
+  };
 }
 
 export interface ProviderMetadata {

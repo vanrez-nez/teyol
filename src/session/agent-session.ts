@@ -219,6 +219,23 @@ const THINKING_LEVELS: ThinkingLevel[] = ["off", "minimal", "low", "medium", "hi
 /** Thinking levels including xhigh (for supported models) */
 const THINKING_LEVELS_WITH_XHIGH: ThinkingLevel[] = ["off", "minimal", "low", "medium", "high", "xhigh"];
 
+const NO_SELECTED_MODEL = {
+  id: "unknown",
+  name: "unknown",
+  api: "unknown",
+  provider: "unknown",
+  baseUrl: "",
+  reasoning: false,
+  input: [],
+  cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
+  contextWindow: 0,
+  maxTokens: 0,
+} satisfies Model<any>;
+
+function isNoSelectedModel(model: Model<any> | undefined): boolean {
+  return !model || (model.provider === "unknown" && model.id === "unknown" && model.api === "unknown");
+}
+
 // ============================================================================
 // AgentSession Class
 // ============================================================================
@@ -981,7 +998,7 @@ export class AgentSession {
       }
 
       // Validate model
-      if (!this.model) {
+      if (isNoSelectedModel(this.model)) {
         throw new Error(formatNoModelSelectedMessage());
       }
 
@@ -1384,6 +1401,18 @@ export class AgentSession {
     await this._emitModelSelect(model, previousModel, "set");
   }
 
+  async revalidateSelectedModel(): Promise<{ previousModel: Model<any> | undefined; model: Model<any> | undefined }> {
+    const previousModel = this.model;
+    if (isNoSelectedModel(previousModel) || this._modelRegistry.hasConfiguredAuth(previousModel)) {
+      return { previousModel, model: isNoSelectedModel(previousModel) ? undefined : previousModel };
+    }
+
+    this.agent.state.model = NO_SELECTED_MODEL;
+    this.settingsManager.clearDefaultModelAndProvider();
+    await this._emitModelSelect(NO_SELECTED_MODEL, previousModel, "restore");
+    return { previousModel, model: undefined };
+  }
+
   /**
    * Cycle to next/previous model.
    * Uses scoped models (from --models flag) if available, otherwise all available models.
@@ -1583,7 +1612,7 @@ export class AgentSession {
     this._emit({ type: "compaction_start", reason: "manual" });
 
     try {
-      if (!this.model) {
+      if (isNoSelectedModel(this.model)) {
         throw new Error(formatNoModelSelectedMessage());
       }
 
