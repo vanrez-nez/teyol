@@ -98,6 +98,7 @@ import { ExtensionInputComponent } from "./interactive/components/extension-inpu
 import { ExtensionSelectorComponent } from "./interactive/components/extension-selector.js";
 import { FooterComponent } from "./interactive/components/footer.js";
 import { keyHint, keyText, rawKeyHint } from "./interactive/components/keybinding-hints.js";
+import { loadAsciiLogo, LogoComponent } from "./interactive/logo.js";
 import { LoginDialogComponent } from "./interactive/components/login-dialog.js";
 import { ModelSelectorComponent } from "./interactive/components/model-selector.js";
 import { type AuthSelectorProvider, OAuthSelectorComponent } from "./interactive/components/oauth-selector.js";
@@ -536,7 +537,7 @@ export class InteractiveMode {
 
     // Add header with keybindings from config (unless silenced)
     if (this.options.verbose || !this.settingsManager.getQuietStartup()) {
-      const logo = theme.bold(theme.fg("accent", APP_NAME)) + theme.fg("dim", ` v${this.version}`);
+      const versionLine = `${APP_NAME} v${this.version}`;
 
       // Build startup instructions using keybinding hint helpers
       const hint = (keybinding: AppKeybinding, description: string) => keyHint(keybinding, description);
@@ -578,8 +579,8 @@ export class InteractiveMode {
         `Akah can explain its own features and look up its docs. Ask it how to use or extend Akah.`,
       );
       this.builtInHeader = new ExpandableText(
-        () => `${logo}\n${compactInstructions}\n${compactOnboarding}\n\n${onboarding}`,
-        () => `${logo}\n${expandedInstructions}\n\n${onboarding}`,
+        () => `${compactInstructions}\n${compactOnboarding}\n\n${onboarding}`,
+        () => `${expandedInstructions}\n\n${onboarding}`,
         this.getStartupExpansionState(),
         1,
         0,
@@ -587,6 +588,7 @@ export class InteractiveMode {
 
       // Setup UI layout
       this.headerContainer.addChild(new Spacer(1));
+      this.headerContainer.addChild(new LogoComponent(loadAsciiLogo(), versionLine, 0, 1));
       this.headerContainer.addChild(this.builtInHeader);
       this.headerContainer.addChild(new Spacer(1));
     } else {
