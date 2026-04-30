@@ -84,8 +84,7 @@
 				"thinkingLow",
 				"thinkingMedium",
 				"thinkingHigh",
-				"thinkingXhigh",
-				"bashMode"
+				"thinkingXhigh"
 			],
 			"properties": {
 				"accent": {
@@ -287,10 +286,6 @@
 				"thinkingXhigh": {
 					"$ref": "#/$defs/colorValue",
 					"description": "Thinking level border: xhigh"
-				},
-				"bashMode": {
-					"$ref": "#/$defs/colorValue",
-					"description": "Editor border color for extension-defined shell input states"
 				}
 			},
 			"additionalProperties": false
