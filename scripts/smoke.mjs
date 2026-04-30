@@ -13,9 +13,11 @@ import { SettingsManager } from "../dist/session/settings-manager.js";
 import { buildSystemPrompt } from "../dist/session/system-prompt.js";
 
 const repoRoot = process.cwd();
+const cliRoot = mkdtempSync(join(tmpdir(), "akah-cli-"));
+const cliEnv = { ...process.env, AKAH_AGENT_DIR: join(cliRoot, "agent") };
 
 function makeServices(name) {
-	const root = mkdtempSync(join(tmpdir(), `ai-cli-${name}-`));
+	const root = mkdtempSync(join(tmpdir(), `akah-${name}-`));
 	const agentDir = join(root, "agent");
 	const authStorage = AuthStorage.create(join(root, "auth.json"));
 	const settingsManager = SettingsManager.create(repoRoot, agentDir);
@@ -116,7 +118,7 @@ function testSystemPrompt() {
 	const prompt = buildSystemPrompt({ cwd: repoRoot, selectedTools: [] });
 	assert.match(prompt, /Available tools:\n\(none\)/);
 	assert.match(prompt, new RegExp(repoRoot.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
-	assert.doesNotMatch(prompt, /coding assistant|coding agent|bash|edit|write|pi/i);
+	assert.doesNotMatch(prompt, /coding assistant|coding agent|bash|edit|write|pi-mono|ai-cli/i);
 
 	const toolPrompt = buildSystemPrompt({
 		cwd: repoRoot,
@@ -130,9 +132,10 @@ function testSystemPrompt() {
 function testCliHelp() {
 	const help = execFileSync(process.execPath, ["dist/cli/main.js", "--help"], {
 		cwd: repoRoot,
+		env: cliEnv,
 		encoding: "utf-8",
 	});
-	assert.match(help, /^ai - Generic AI assistant/m);
+	assert.match(help, /^akah - Generic AI assistant/m);
 	assert.doesNotMatch(help, /Built-in Tool|update \[source|Run bash|coding agent/i);
 }
 
@@ -140,6 +143,7 @@ function testUnknownFlagDiagnostics() {
 	assert.throws(() => {
 		execFileSync(process.execPath, ["dist/cli/main.js", "-z"], {
 			cwd: repoRoot,
+			env: cliEnv,
 			encoding: "utf-8",
 			stdio: "pipe",
 		});
@@ -148,6 +152,7 @@ function testUnknownFlagDiagnostics() {
 	assert.throws(() => {
 		execFileSync(process.execPath, ["dist/cli/main.js", "--fake-extension-flag", "--list-models"], {
 			cwd: repoRoot,
+			env: cliEnv,
 			encoding: "utf-8",
 			stdio: "pipe",
 		});

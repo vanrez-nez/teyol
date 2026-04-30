@@ -3,7 +3,6 @@
  */
 
 import {
-	type AnthropicMessagesCompat,
 	type Api,
 	type AssistantMessageEventStream,
 	type Context,
@@ -13,7 +12,6 @@ import {
 	type Model,
 	type OAuthProviderInterface,
 	type OpenAICompletionsCompat,
-	type OpenAIResponsesCompat,
 	registerApiProvider,
 	resetApiProviders,
 	type SimpleStreamOptions,
@@ -74,12 +72,6 @@ const OpenRouterRoutingSchema = Type.Object({
 	preferred_max_latency: Type.Optional(Type.Union([Type.Number(), PercentileCutoffsSchema])),
 });
 
-// Schema for Vercel AI Gateway routing preferences
-const VercelGatewayRoutingSchema = Type.Object({
-	only: Type.Optional(Type.Array(Type.String())),
-	order: Type.Optional(Type.Array(Type.String())),
-});
-
 // Schema for OpenAI compatibility settings
 const ReasoningEffortMapSchema = Type.Object({
 	minimal: Type.Optional(Type.String()),
@@ -112,26 +104,11 @@ const OpenAICompletionsCompatSchema = Type.Object({
 	),
 	cacheControlFormat: Type.Optional(Type.Literal("anthropic")),
 	openRouterRouting: Type.Optional(OpenRouterRoutingSchema),
-	vercelGatewayRouting: Type.Optional(VercelGatewayRoutingSchema),
 	supportsStrictMode: Type.Optional(Type.Boolean()),
 	supportsLongCacheRetention: Type.Optional(Type.Boolean()),
 });
 
-const OpenAIResponsesCompatSchema = Type.Object({
-	sendSessionIdHeader: Type.Optional(Type.Boolean()),
-	supportsLongCacheRetention: Type.Optional(Type.Boolean()),
-});
-
-const AnthropicMessagesCompatSchema = Type.Object({
-	supportsEagerToolInputStreaming: Type.Optional(Type.Boolean()),
-	supportsLongCacheRetention: Type.Optional(Type.Boolean()),
-});
-
-const ProviderCompatSchema = Type.Union([
-	OpenAICompletionsCompatSchema,
-	OpenAIResponsesCompatSchema,
-	AnthropicMessagesCompatSchema,
-]);
+const ProviderCompatSchema = OpenAICompletionsCompatSchema;
 
 // Schema for custom model definition
 // Most fields are optional with sensible defaults for local models (Ollama, LM Studio, etc.)
@@ -245,9 +222,9 @@ function mergeCompat(
 ): Model<Api>["compat"] | undefined {
 	if (!overrideCompat) return baseCompat;
 
-	const base = baseCompat as OpenAICompletionsCompat | OpenAIResponsesCompat | AnthropicMessagesCompat | undefined;
-	const override = overrideCompat as OpenAICompletionsCompat | OpenAIResponsesCompat | AnthropicMessagesCompat;
-	const merged = { ...base, ...override } as OpenAICompletionsCompat | OpenAIResponsesCompat | AnthropicMessagesCompat;
+	const base = baseCompat as OpenAICompletionsCompat | undefined;
+	const override = overrideCompat as OpenAICompletionsCompat;
+	const merged = { ...base, ...override } as OpenAICompletionsCompat;
 
 	const baseCompletions = base as OpenAICompletionsCompat | undefined;
 	const overrideCompletions = override as OpenAICompletionsCompat;
@@ -257,13 +234,6 @@ function mergeCompat(
 		mergedCompletions.openRouterRouting = {
 			...baseCompletions?.openRouterRouting,
 			...overrideCompletions.openRouterRouting,
-		};
-	}
-
-	if (baseCompletions?.vercelGatewayRouting || overrideCompletions.vercelGatewayRouting) {
-		mergedCompletions.vercelGatewayRouting = {
-			...baseCompletions?.vercelGatewayRouting,
-			...overrideCompletions.vercelGatewayRouting,
 		};
 	}
 
@@ -611,6 +581,7 @@ export class ModelRegistry {
 	 * Get API key for a model.
 	 */
 	hasConfiguredAuth(model: Model<Api>): boolean {
+		if (model.provider === "ollama") return true;
 		return (
 			this.authStorage.hasAuth(model.provider) ||
 			this.providerRequestConfigs.get(model.provider)?.apiKey !== undefined
@@ -658,6 +629,7 @@ export class ModelRegistry {
 			const apiKeyFromAuthStorage = await this.authStorage.getApiKey(model.provider, { includeFallback: false });
 			const apiKey =
 				apiKeyFromAuthStorage ??
+				(model.provider === "ollama" ? "ollama" : undefined) ??
 				(providerConfig?.apiKey
 					? resolveConfigValueOrThrow(providerConfig.apiKey, `API key for provider "${model.provider}"`)
 					: undefined);

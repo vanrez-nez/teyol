@@ -34,14 +34,12 @@ import { AssistantMessageEventStream } from "../utils/event-stream.js";
 import { headersToRecord } from "../utils/headers.js";
 import { parseStreamingJson } from "../utils/json-parse.js";
 import { sanitizeSurrogates } from "../utils/sanitize-unicode.js";
-import { isCloudflareProvider, resolveCloudflareBaseUrl } from "./cloudflare.js";
-import { buildCopilotDynamicHeaders, hasCopilotVisionInput } from "./github-copilot-headers.js";
 import { buildBaseOptions, clampReasoning } from "./simple-options.js";
 import { transformMessages } from "./transform-messages.js";
 
 /**
  * Check if conversation messages contain tool calls or tool results.
- * This is needed because Anthropic (via proxy) requires the tools param
+ * This is needed because some OpenAI-compatible proxies require the tools param
  * to be present when messages include tool_calls or tool role messages.
  */
 function hasToolHistory(messages: Message[]): boolean {
@@ -102,7 +100,7 @@ function resolveCacheRetention(cacheRetention?: CacheRetention): CacheRetention 
 	if (cacheRetention) {
 		return cacheRetention;
 	}
-	if (typeof process !== "undefined" && process.env.PI_CACHE_RETENTION === "long") {
+	if (typeof process !== "undefined" && process.env.AKAH_CACHE_RETENTION === "long") {
 		return "long";
 	}
 	return "short";
@@ -405,11 +403,11 @@ export const streamSimpleOpenAICompletions: StreamFunction<"openai-completions",
 	options?: SimpleStreamOptions,
 ): AssistantMessageEventStream => {
 	const apiKey = options?.apiKey || getEnvApiKey(model.provider);
-	if (!apiKey) {
+	if (!apiKey && model.provider !== "ollama") {
 		throw new Error(`No API key for provider: ${model.provider}`);
 	}
 
-	const base = buildBaseOptions(model, options, apiKey);
+	const base = buildBaseOptions(model, options, apiKey ?? "ollama");
 	const reasoningEffort = supportsXhigh(model) ? options?.reasoning : clampReasoning(options?.reasoning);
 	const toolChoice = (options as OpenAICompletionsOptions | undefined)?.toolChoice;
 
@@ -428,24 +426,10 @@ function createClient(
 	sessionId?: string,
 	compat: ResolvedOpenAICompletionsCompat = getCompat(model),
 ) {
-	if (!apiKey) {
-		if (!process.env.OPENAI_API_KEY) {
-			throw new Error(
-				"OpenAI API key is required. Set OPENAI_API_KEY environment variable or pass it as an argument.",
-			);
-		}
-		apiKey = process.env.OPENAI_API_KEY;
-	}
+	apiKey ||= model.provider === "ollama" ? "ollama" : undefined;
+	if (!apiKey) throw new Error(`No API key for provider: ${model.provider}`);
 
 	const headers = { ...model.headers };
-	if (model.provider === "github-copilot") {
-		const hasImages = hasCopilotVisionInput(context.messages);
-		const copilotHeaders = buildCopilotDynamicHeaders({
-			messages: context.messages,
-			hasImages,
-		});
-		Object.assign(headers, copilotHeaders);
-	}
 
 	if (sessionId && compat.sendSessionAffinityHeaders) {
 		headers.session_id = sessionId;
@@ -460,7 +444,7 @@ function createClient(
 
 	return new OpenAI({
 		apiKey,
-		baseURL: isCloudflareProvider(model.provider) ? resolveCloudflareBaseUrl(model) : model.baseUrl,
+		baseURL: model.baseUrl,
 		dangerouslyAllowBrowser: true,
 		defaultHeaders: headers,
 	});
@@ -510,11 +494,8 @@ function buildParams(
 
 	if (context.tools && context.tools.length > 0) {
 		params.tools = convertTools(context.tools, compat);
-		if (compat.zaiToolStream) {
-			(params as any).tool_stream = true;
-		}
 	} else if (hasToolHistory(context.messages)) {
-		// Anthropic (via LiteLLM/proxy) requires tools param when conversation has tool_calls/tool_results
+		// Some proxies require tools param when conversation has tool_calls/tool_results.
 		params.tools = [];
 	}
 
@@ -558,17 +539,6 @@ function buildParams(
 	// OpenRouter provider routing preferences
 	if (model.baseUrl.includes("openrouter.ai") && model.compat?.openRouterRouting) {
 		(params as any).provider = model.compat.openRouterRouting;
-	}
-
-	// Vercel AI Gateway provider routing preferences
-	if (model.baseUrl.includes("ai-gateway.vercel.sh") && model.compat?.vercelGatewayRouting) {
-		const routing = model.compat.vercelGatewayRouting;
-		if (routing.only || routing.order) {
-			const gatewayOptions: Record<string, string[]> = {};
-			if (routing.only) gatewayOptions.only = routing.only;
-			if (routing.order) gatewayOptions.order = routing.order;
-			(params as any).providerOptions = { gateway: gatewayOptions };
-		}
 	}
 
 	return params;
@@ -704,9 +674,8 @@ export function convertMessages(
 	const params: ChatCompletionMessageParam[] = [];
 
 	const normalizeToolCallId = (id: string): string => {
-		// Handle pipe-separated IDs from OpenAI Responses API
+		// Handle pipe-separated IDs from OpenAI-compatible proxies.
 		// Format: {call_id}|{id} where {id} can be 400+ chars with special chars (+, /, =)
-		// These come from providers like github-copilot, openai-codex, opencode
 		// Extract just the call_id part and normalize it
 		if (id.includes("|")) {
 			const [callId] = id.split("|");
@@ -968,7 +937,7 @@ function parseChunkUsage(
 	const reportedCachedTokens = rawUsage.prompt_tokens_details?.cached_tokens ?? rawUsage.prompt_cache_hit_tokens ?? 0;
 	const cacheWriteTokens = rawUsage.prompt_tokens_details?.cache_write_tokens || 0;
 
-	// Normalize to pi-ai semantics:
+	// Normalize to Akah semantics:
 	// - cacheRead: hits from cache created by previous requests only
 	// - cacheWrite: tokens written to cache in this request
 	// Some OpenAI-compatible providers (observed on OpenRouter) report cached_tokens
@@ -1027,8 +996,6 @@ function detectCompat(model: Model<"openai-completions">): ResolvedOpenAIComplet
 	const baseUrl = model.baseUrl;
 
 	const isZai = provider === "zai" || baseUrl.includes("api.z.ai");
-	const isCloudflareWorkersAI = provider === "cloudflare-workers-ai" || baseUrl.includes("api.cloudflare.com");
-
 	const isNonStandard =
 		provider === "cerebras" ||
 		baseUrl.includes("cerebras.ai") ||
@@ -1038,8 +1005,7 @@ function detectCompat(model: Model<"openai-completions">): ResolvedOpenAIComplet
 		baseUrl.includes("deepseek.com") ||
 		isZai ||
 		provider === "opencode" ||
-		baseUrl.includes("opencode.ai") ||
-		isCloudflareWorkersAI;
+		baseUrl.includes("opencode.ai");
 
 	const useMaxTokens = baseUrl.includes("chutes.ai");
 
@@ -1084,8 +1050,6 @@ function detectCompat(model: Model<"openai-completions">): ResolvedOpenAIComplet
 					? "openrouter"
 					: "openai",
 		openRouterRouting: {},
-		vercelGatewayRouting: {},
-		zaiToolStream: false,
 		supportsStrictMode: true,
 		cacheControlFormat,
 		sendSessionAffinityHeaders: false,
@@ -1117,8 +1081,6 @@ function getCompat(model: Model<"openai-completions">): ResolvedOpenAICompletion
 			detected.requiresReasoningContentOnAssistantMessages,
 		thinkingFormat: model.compat.thinkingFormat ?? detected.thinkingFormat,
 		openRouterRouting: model.compat.openRouterRouting ?? {},
-		vercelGatewayRouting: model.compat.vercelGatewayRouting ?? detected.vercelGatewayRouting,
-		zaiToolStream: model.compat.zaiToolStream ?? detected.zaiToolStream,
 		supportsStrictMode: model.compat.supportsStrictMode ?? detected.supportsStrictMode,
 		cacheControlFormat: model.compat.cacheControlFormat ?? detected.cacheControlFormat,
 		sendSessionAffinityHeaders: model.compat.sendSessionAffinityHeaders ?? detected.sendSessionAffinityHeaders,

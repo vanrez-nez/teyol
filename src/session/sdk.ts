@@ -20,7 +20,7 @@ import { time } from "./timings.js";
 export interface CreateAgentSessionOptions {
 	/** Working directory for project-local discovery. Default: process.cwd() */
 	cwd?: string;
-	/** Global config directory. Default: ~/.ai-cli/agent */
+	/** Global config directory. Default: ~/.akah/agent */
 	agentDir?: string;
 
 	/** Auth storage for credentials. Default: AuthStorage.create(agentDir/auth.json) */
@@ -108,15 +108,9 @@ function getAttributionHeaders(
 
 	if (model.provider === "openrouter" || model.baseUrl.includes("openrouter.ai")) {
 		return {
-			"HTTP-Referer": "https://pi.dev",
-			"X-OpenRouter-Title": "pi",
+			"HTTP-Referer": "https://akah.local",
+			"X-OpenRouter-Title": "akah",
 			"X-OpenRouter-Categories": "cli-agent",
-		};
-	}
-
-	if (model.provider === "cloudflare-workers-ai" || model.baseUrl.includes("api.cloudflare.com")) {
-		return {
-			"User-Agent": "pi-coding-agent",
 		};
 	}
 
@@ -134,7 +128,7 @@ function getAttributionHeaders(
  * // With explicit model
  * import { getModel } from '#ai/index.js';
  * const { session } = await createAgentSession({
- *   model: getModel('anthropic', 'claude-opus-4-5'),
+ *   model: getModel('openrouter', 'openrouter/auto'),
  *   thinkingLevel: 'high',
  * });
  *

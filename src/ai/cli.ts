@@ -75,7 +75,7 @@ ${providerList}
 
 Examples:
   npx #ai/index.js login              # interactive provider selection
-  npx #ai/index.js login anthropic    # login to specific provider
+  npx #ai/index.js login openrouter   # login to specific provider
   npx #ai/index.js list               # list providers
 `);
 		return;

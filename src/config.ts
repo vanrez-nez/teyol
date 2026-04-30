@@ -28,10 +28,10 @@ export function getPackageJsonPath(): string {
 
 const pkg = JSON.parse(readFileSync(getPackageJsonPath(), "utf-8"));
 
-export const PACKAGE_NAME: string = pkg.name || "ai-cli";
-export const APP_NAME: string = pkg.piConfig?.name || "ai";
-export const APP_TITLE: string = pkg.piConfig?.title || pkg.piConfig?.name || "AI";
-export const CONFIG_DIR_NAME: string = pkg.piConfig?.configDir || ".ai-cli";
+export const PACKAGE_NAME: string = pkg.name || "akah";
+export const APP_NAME: string = pkg.akahConfig?.name || "akah";
+export const APP_TITLE: string = pkg.akahConfig?.title || pkg.akahConfig?.name || "Akah";
+export const CONFIG_DIR_NAME: string = pkg.akahConfig?.configDir || ".akah";
 export const VERSION: string = pkg.version || "0.0.0";
 
 export const ENV_AGENT_DIR = `${APP_NAME.toUpperCase()}_AGENT_DIR`;

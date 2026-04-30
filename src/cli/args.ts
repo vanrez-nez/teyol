@@ -239,7 +239,7 @@ ${chalk.bold("Examples:")}
   ${APP_NAME} -p "What is the capital of France?"
 
 ${chalk.bold("Environment Variables:")}
-  ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY, etc.
+  OPENROUTER_API_KEY, OLLAMA_API_KEY
   ${ENV_AGENT_DIR.padEnd(32)} - Session storage directory
 
 ${chalk.bold("Tools:")}

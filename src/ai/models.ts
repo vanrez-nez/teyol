@@ -51,7 +51,7 @@ export function calculateCost<TApi extends Api>(model: Model<TApi>, usage: Usage
  * Supported today:
  * - GPT-5.2 / GPT-5.3 / GPT-5.4 / GPT-5.5 model families
  * - DeepSeek V4 Pro and Flash
- * - Opus 4.6+ models (xhigh maps to adaptive effort "max" on Anthropic-compatible providers)
+ * - Opus 4.6+ models when routed through OpenRouter
  */
 export function supportsXhigh<TApi extends Api>(model: Model<TApi>): boolean {
 	if (

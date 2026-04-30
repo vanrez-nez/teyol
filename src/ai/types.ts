@@ -2,47 +2,11 @@ import type { AssistantMessageEventStream } from "./utils/event-stream.js";
 
 export type { AssistantMessageEventStream } from "./utils/event-stream.js";
 
-export type KnownApi =
-	| "openai-completions"
-	| "mistral-conversations"
-	| "openai-responses"
-	| "azure-openai-responses"
-	| "openai-codex-responses"
-	| "anthropic-messages"
-	| "bedrock-converse-stream"
-	| "google-generative-ai"
-	| "google-gemini-cli"
-	| "google-vertex";
+export type KnownApi = "openai-completions";
 
 export type Api = KnownApi | (string & {});
 
-export type KnownProvider =
-	| "amazon-bedrock"
-	| "anthropic"
-	| "google"
-	| "google-gemini-cli"
-	| "google-antigravity"
-	| "google-vertex"
-	| "openai"
-	| "azure-openai-responses"
-	| "openai-codex"
-	| "deepseek"
-	| "github-copilot"
-	| "xai"
-	| "groq"
-	| "cerebras"
-	| "openrouter"
-	| "vercel-ai-gateway"
-	| "zai"
-	| "mistral"
-	| "minimax"
-	| "minimax-cn"
-	| "huggingface"
-	| "fireworks"
-	| "opencode"
-	| "opencode-go"
-	| "kimi-coding"
-	| "cloudflare-workers-ai";
+export type KnownProvider = "ollama" | "openrouter";
 export type Provider = KnownProvider | string;
 
 export type ThinkingLevel = "minimal" | "low" | "medium" | "high" | "xhigh";
@@ -104,12 +68,12 @@ export interface StreamOptions {
 	headers?: Record<string, string>;
 	/**
 	 * HTTP request timeout in milliseconds for providers/SDKs that support it.
-	 * For example, OpenAI and Anthropic SDK clients default to 10 minutes.
+	 * For example, OpenAI-compatible clients may set their own defaults.
 	 */
 	timeoutMs?: number;
 	/**
 	 * Maximum retry attempts for providers/SDKs that support client-side retries.
-	 * For example, OpenAI and Anthropic SDK clients default to 2.
+	 * For example, OpenAI-compatible clients may set their own defaults.
 	 */
 	maxRetries?: number;
 	/**
@@ -123,7 +87,7 @@ export interface StreamOptions {
 	/**
 	 * Optional metadata to include in API requests.
 	 * Providers extract the fields they understand and ignore the rest.
-	 * For example, Anthropic uses `user_id` for abuse tracking and rate limiting.
+	 * Providers extract the fields they understand and ignore the rest.
 	 */
 	metadata?: Record<string, unknown>;
 }
@@ -283,7 +247,7 @@ export interface OpenAICompletionsCompat {
 	supportsDeveloperRole?: boolean;
 	/** Whether the provider supports `reasoning_effort`. Default: auto-detected from URL. */
 	supportsReasoningEffort?: boolean;
-	/** Optional mapping from pi-ai reasoning levels to provider/model-specific `reasoning_effort` values. */
+	/** Optional mapping from Akah reasoning levels to provider/model-specific `reasoning_effort` values. */
 	reasoningEffortMap?: Partial<Record<ThinkingLevel, string>>;
 	/** Whether the provider supports `stream_options: { include_usage: true }` for token usage in streaming responses. Default: true. */
 	supportsUsageInStreaming?: boolean;
@@ -301,10 +265,6 @@ export interface OpenAICompletionsCompat {
 	thinkingFormat?: "openai" | "openrouter" | "deepseek" | "zai" | "qwen" | "qwen-chat-template";
 	/** OpenRouter-specific routing preferences. Only used when baseUrl points to OpenRouter. */
 	openRouterRouting?: OpenRouterRouting;
-	/** Vercel AI Gateway routing preferences. Only used when baseUrl points to Vercel AI Gateway. */
-	vercelGatewayRouting?: VercelGatewayRouting;
-	/** Whether z.ai supports top-level `tool_stream: true` for streaming tool call deltas. Default: false. */
-	zaiToolStream?: boolean;
 	/** Whether the provider supports the `strict` field in tool definitions. Default: true. */
 	supportsStrictMode?: boolean;
 	/** Cache control convention for prompt caching. "anthropic" applies Anthropic-style `cache_control` markers to the system prompt, last tool definition, and last user/assistant text content. */
@@ -312,28 +272,6 @@ export interface OpenAICompletionsCompat {
 	/** Whether to send known session-affinity headers (`session_id`, `x-client-request-id`, `x-session-affinity`) from `options.sessionId` when caching is enabled. Default: false. */
 	sendSessionAffinityHeaders?: boolean;
 	/** Whether the provider supports long prompt cache retention (`prompt_cache_retention: "24h"` or Anthropic-style `cache_control.ttl: "1h"`, depending on format). Default: true. */
-	supportsLongCacheRetention?: boolean;
-}
-
-/** Compatibility settings for OpenAI Responses APIs. */
-export interface OpenAIResponsesCompat {
-	/** Whether to send the OpenAI `session_id` cache-affinity header from `options.sessionId` when caching is enabled. Default: true. */
-	sendSessionIdHeader?: boolean;
-	/** Whether the provider supports `prompt_cache_retention: "24h"`. Default: true. */
-	supportsLongCacheRetention?: boolean;
-}
-
-/** Compatibility settings for Anthropic Messages-compatible APIs. */
-export interface AnthropicMessagesCompat {
-	/**
-	 * Whether the provider accepts per-tool `eager_input_streaming`.
-	 * When false, the Anthropic provider omits `tools[].eager_input_streaming`
-	 * and sends the legacy `fine-grained-tool-streaming-2025-05-14` beta header
-	 * for tool-enabled requests.
-	 * Default: true.
-	 */
-	supportsEagerToolInputStreaming?: boolean;
-	/** Whether the provider supports Anthropic long cache retention (`cache_control.ttl: "1h"`). Default: true. */
 	supportsLongCacheRetention?: boolean;
 }
 
@@ -412,18 +350,6 @@ export interface OpenRouterRouting {
 		  };
 }
 
-/**
- * Vercel AI Gateway routing preferences.
- * Controls which upstream providers the gateway routes requests to.
- * @see https://vercel.com/docs/ai-gateway/models-and-providers/provider-options
- */
-export interface VercelGatewayRouting {
-	/** List of provider slugs to exclusively use for this request (e.g., ["bedrock", "anthropic"]). */
-	only?: string[];
-	/** List of provider slugs to try in order (e.g., ["anthropic", "openai"]). */
-	order?: string[];
-}
-
 // Model interface for the unified model system
 export interface Model<TApi extends Api> {
 	id: string;
@@ -443,11 +369,5 @@ export interface Model<TApi extends Api> {
 	maxTokens: number;
 	headers?: Record<string, string>;
 	/** Compatibility overrides for OpenAI-compatible APIs. If not set, auto-detected from baseUrl. */
-	compat?: TApi extends "openai-completions"
-		? OpenAICompletionsCompat
-		: TApi extends "openai-responses"
-			? OpenAIResponsesCompat
-			: TApi extends "anthropic-messages"
-				? AnthropicMessagesCompat
-				: never;
+	compat?: TApi extends "openai-completions" ? OpenAICompletionsCompat : never;
 }
