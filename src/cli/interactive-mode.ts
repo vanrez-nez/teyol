@@ -569,7 +569,7 @@ export class InteractiveMode {
 			);
 			const onboarding = theme.fg(
 				"dim",
-				`Pi can explain its own features and look up its docs. Ask it how to use or extend Pi.`,
+				`Akah can explain its own features and look up its docs. Ask it how to use or extend Akah.`,
 			);
 			this.builtInHeader = new ExpandableText(
 				() => `${logo}\n${compactInstructions}\n${compactOnboarding}\n\n${onboarding}`,
@@ -773,7 +773,7 @@ export class InteractiveMode {
 		}
 
 		if (extendedKeysFormat === "xterm") {
-			return "tmux extended-keys-format is xterm. Pi works best with csi-u. Add `set -g extended-keys-format csi-u` to ~/.tmux.conf and restart tmux.";
+			return "tmux extended-keys-format is xterm. Akah works best with csi-u. Add `set -g extended-keys-format csi-u` to ~/.tmux.conf and restart tmux.";
 		}
 
 		return undefined;
@@ -3074,11 +3074,11 @@ export class InteractiveMode {
 		// Keep the event loop alive while suspended. Without this, stopping the TUI
 		// can leave Node with no ref'ed handles, causing the process to exit on fg
 		// before the SIGCONT handler gets a chance to restore the terminal.
-		const suspendKeepAlive = setInterval(() => {}, 2 ** 30);
+		const suspendKeepAlive = setInterval(() => { }, 2 ** 30);
 
 		// Ignore SIGINT while suspended so Ctrl+C in the terminal does not
 		// kill the backgrounded process. The handler is removed on resume.
-		const ignoreSigint = () => {};
+		const ignoreSigint = () => { };
 		process.on("SIGINT", ignoreSigint);
 
 		// Set up handler to restore TUI when resumed
@@ -3431,8 +3431,7 @@ export class InteractiveMode {
 			this.compactionQueuedMessages = queuedMessages;
 			this.updatePendingMessagesDisplay();
 			this.showError(
-				`Failed to send queued message${queuedMessages.length > 1 ? "s" : ""}: ${
-					error instanceof Error ? error.message : String(error)
+				`Failed to send queued message${queuedMessages.length > 1 ? "s" : ""}: ${error instanceof Error ? error.message : String(error)
 				}`,
 			);
 		};
@@ -4643,7 +4642,7 @@ export class InteractiveMode {
 		this.ui.requestRender();
 
 		const restoreEditor = () => {
-				this.editorContainer.clear();
+			this.editorContainer.clear();
 			this.editorContainer.addChild(this.editor);
 			this.ui.setFocus(this.editor);
 			try {
@@ -4670,7 +4669,7 @@ export class InteractiveMode {
 				proc.on("close", (code) => resolve({ stdout, stderr, code }));
 			});
 
-	
+
 			restoreEditor();
 
 			if (result.code !== 0) {
