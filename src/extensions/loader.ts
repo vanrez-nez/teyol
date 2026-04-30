@@ -58,11 +58,11 @@ function getAliases(): Record<string, string> {
 	if (_aliases) return _aliases;
 
 	const __dirname = path.dirname(fileURLToPath(import.meta.url));
-	const packageIndex = path.resolve(__dirname, "../..", "index.js");
+	const packageIndex = path.resolve(__dirname, "..", "index.js");
 
-	const typeboxEntry = require.resolve("typebox");
-	const typeboxCompileEntry = require.resolve("typebox/compiler");
-	const typeboxValueEntry = require.resolve("typebox/value");
+	const typeboxEntry = require.resolve("@sinclair/typebox");
+	const typeboxCompileEntry = require.resolve("@sinclair/typebox/compiler");
+	const typeboxValueEntry = require.resolve("@sinclair/typebox/value");
 
 	const packagesRoot = path.resolve(__dirname, "../../../../");
 	const resolveWorkspaceOrImport = (workspaceRelativePath: string, specifier: string): string => {
