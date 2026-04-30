@@ -2,6 +2,7 @@
  * System prompt construction and context loading.
  */
 
+import { getLogger } from "./logger.js";
 import { formatSkillsForPrompt, type Skill } from "./skills.js";
 
 export interface BuildSystemPromptOptions {
@@ -79,6 +80,7 @@ export function buildSystemPrompt(options: BuildSystemPromptOptions): string {
 		prompt += `\nCurrent date: ${date}`;
 		prompt += `\nCurrent working directory: ${promptCwd}`;
 
+		getLogger().debug("prompt.system", { custom: true, prompt });
 		return prompt;
 	}
 
@@ -132,5 +134,10 @@ ${guidelines}`;
 	prompt += `\nCurrent date: ${date}`;
 	prompt += `\nCurrent working directory: ${promptCwd}`;
 
+	getLogger().debug("prompt.system", {
+		custom: false,
+		visibleTools,
+		prompt,
+	});
 	return prompt;
 }

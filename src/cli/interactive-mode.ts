@@ -53,11 +53,19 @@ import {
   APP_TITLE,
   getAgentDir,
   getAuthPath,
-  getDebugLogPath,
   getDocsPath,
   getShareViewerUrl,
+  isDevMode,
   VERSION,
 } from "../config.js";
+import {
+  configureLogger,
+  getLogFilePath,
+  getLogger,
+  type LogLevel,
+  type LogMode,
+  readLogTail,
+} from "../session/logger.js";
 import type {
   AutocompleteProviderFactory,
   EditorFactory,
@@ -100,6 +108,9 @@ import { FooterComponent } from "./interactive/components/footer.js";
 import { keyHint, keyText, rawKeyHint } from "./interactive/components/keybinding-hints.js";
 import { loadAsciiLogo, LogoComponent } from "./interactive/logo.js";
 import { LoginDialogComponent } from "./interactive/components/login-dialog.js";
+import { type LogAction, LogActionsSelectorComponent } from "./interactive/components/log-action-selector.js";
+import { LogLevelsSelectorComponent } from "./interactive/components/log-levels-selector.js";
+import { LogModeSelectorComponent } from "./interactive/components/log-mode-selector.js";
 import { type ModelAction, ModelActionsSelectorComponent } from "./interactive/components/model-actions-selector.js";
 import { ModelSelectorComponent } from "./interactive/components/model-selector.js";
 import { type AuthSelectorProvider, OAuthSelectorComponent } from "./interactive/components/oauth-selector.js";
@@ -404,10 +415,35 @@ export class InteractiveMode {
 
   private createBaseAutocompleteProvider(): AutocompleteProvider {
     // Define commands for autocomplete
-    const slashCommands: SlashCommand[] = BUILTIN_SLASH_COMMANDS.map((command) => ({
-      name: command.name,
-      description: command.description,
-    }));
+    const devMode = isDevMode();
+    const slashCommands: SlashCommand[] = BUILTIN_SLASH_COMMANDS
+      .filter((command) => command.name !== "log" || devMode)
+      .map((command) => ({
+        name: command.name,
+        description: command.description,
+      }));
+
+    const logCommand = slashCommands.find((command) => command.name === "log");
+    if (logCommand) {
+      const logActions: Array<{ value: LogAction; description: string }> = [
+        { value: "view", description: "Show the current log file path and tail" },
+        { value: "enable", description: "Start writing log entries" },
+        { value: "disable", description: "Stop writing log entries" },
+        { value: "mode", description: "Choose between app and session log files" },
+        { value: "rotation_lines", description: "Set rotation line threshold (0 disables)" },
+        { value: "level", description: "Choose which severity levels are written" },
+      ];
+      logCommand.getArgumentCompletions = (prefix: string): AutocompleteItem[] | null => {
+        const normalizedPrefix = prefix.trimStart().toLowerCase();
+        const filtered = logActions.filter((action) => action.value.startsWith(normalizedPrefix));
+        if (filtered.length === 0) return null;
+        return filtered.map((action) => ({
+          value: action.value,
+          label: action.value,
+          description: action.description,
+        }));
+      };
+    }
 
     const modelCommand = slashCommands.find((command) => command.name === "model");
     if (modelCommand) {
@@ -543,6 +579,9 @@ export class InteractiveMode {
 
   async init(): Promise<void> {
     if (this.isInitialized) return;
+
+    this.applyLoggerConfig();
+    getLogger().info("startup", { version: this.version, cwd: this.sessionManager.getCwd() });
 
     this.registerSignalHandlers();
 
@@ -2296,8 +2335,8 @@ export class InteractiveMode {
     this.defaultEditor.onAction("app.model.cycleForward", () => this.cycleModel("forward"));
     this.defaultEditor.onAction("app.model.cycleBackward", () => this.cycleModel("backward"));
 
-    // Global debug handler on TUI (works regardless of focus)
-    this.ui.onDebug = () => this.handleDebugCommand();
+    // Global debug handler on TUI (works regardless of focus): show log file
+    this.ui.onDebug = () => this.printLogFile();
     this.defaultEditor.onAction("app.model.select", () => this.showModelSelector());
     this.defaultEditor.onAction("app.tools.expand", () => this.toggleToolOutputExpansion());
     this.defaultEditor.onAction("app.thinking.toggle", () => this.toggleThinkingBlockVisibility());
@@ -2325,6 +2364,10 @@ export class InteractiveMode {
     this.defaultEditor.onSubmit = async (text: string) => {
       text = text.trim();
       if (!text) return;
+
+      if (text.startsWith("/")) {
+        getLogger().info("slash.dispatch", { text });
+      }
 
       // Handle commands
       if (text === "/settings") {
@@ -2372,9 +2415,9 @@ export class InteractiveMode {
         await this.handleReloadCommand();
         return;
       }
-      if (text === "/debug") {
-        this.handleDebugCommand();
+      if (text === "/log" || text.startsWith("/log ")) {
         this.editor.setText("");
+        await this.handleLogCommand(text);
         return;
       }
       if (text === "/exit" || text === "/quit") {
@@ -4593,6 +4636,8 @@ export class InteractiveMode {
       this.ui.requestRender();
     };
 
+    getLogger().info("reload.start");
+
     try {
       await this.session.reload();
       this.keybindings.reload();
@@ -4630,9 +4675,12 @@ export class InteractiveMode {
       if (modelsJsonError) {
         this.showError(`models.json error: ${modelsJsonError}`);
       }
+      this.applyLoggerConfig();
+      getLogger().info("reload.complete");
       this.showStatus("Reloaded keybindings, extensions, skills, prompts, themes");
     } catch (error) {
       dismissReloadBox(previousEditor as Component);
+      getLogger().error("reload.error", { error });
       this.showError(`Reload failed: ${error instanceof Error ? error.message : String(error)}`);
     }
   }
@@ -5012,37 +5060,220 @@ export class InteractiveMode {
     }
   }
 
-  private handleDebugCommand(): void {
-    const width = this.ui.terminal.columns;
-    const height = this.ui.terminal.rows;
-    const allLines = this.ui.render(width);
+  private applyLoggerConfig(): void {
+    const cfg = this.settingsManager.getLogSettings();
+    let sessionLogDir: string | undefined;
+    if (cfg.mode === "session") {
+      try {
+        const dir = this.sessionManager.getSessionDir();
+        if (typeof dir === "string" && dir.length > 0) {
+          sessionLogDir = dir;
+        }
+      } catch {
+        sessionLogDir = undefined;
+      }
+    }
+    configureLogger({
+      enabled: cfg.enabled,
+      mode: cfg.mode,
+      rotationLines: cfg.rotation_lines,
+      levels: cfg.level,
+      sessionLogDir,
+    });
+  }
 
-    const debugLogPath = getDebugLogPath();
-    const debugData = [
-      `Debug output at ${new Date().toISOString()}`,
-      `Terminal: ${width}x${height}`,
-      `Total lines: ${allLines.length}`,
-      "",
-      "=== All rendered lines with visible widths ===",
-      ...allLines.map((line, idx) => {
-        const vw = visibleWidth(line);
-        const escaped = JSON.stringify(line);
-        return `[${idx}] (w=${vw}) ${escaped}`;
-      }),
-      "",
-      "=== Agent messages (JSONL) ===",
-      ...this.session.messages.map((msg) => JSON.stringify(msg)),
-      "",
-    ].join("\n");
+  private async handleLogCommand(text: string): Promise<void> {
+    const argumentText = text === "/log" ? undefined : text.slice("/log".length).trim();
+    if (!argumentText) {
+      this.showLogActionsSelector();
+      return;
+    }
+    const [action, ...rest] = argumentText.split(/\s+/);
+    const actionArgument = rest.join(" ").trim();
 
-    fs.mkdirSync(path.dirname(debugLogPath), { recursive: true });
-    fs.writeFileSync(debugLogPath, debugData);
+    switch (action) {
+      case "view":
+        this.printLogFile();
+        return;
+      case "enable":
+        this.settingsManager.setLogEnabled(true);
+        this.applyLoggerConfig();
+        getLogger().info("log.enabled");
+        this.showInfo(`Logging enabled. File: ${getLogFilePath()}`);
+        return;
+      case "disable":
+        getLogger().info("log.disabled");
+        this.settingsManager.setLogEnabled(false);
+        this.applyLoggerConfig();
+        this.showInfo("Logging disabled.");
+        return;
+      case "mode":
+        if (actionArgument === "app" || actionArgument === "session") {
+          this.applyLogMode(actionArgument);
+        } else {
+          this.showLogModeSelector();
+        }
+        return;
+      case "rotation_lines":
+      case "rotation-lines":
+        if (actionArgument.length > 0) {
+          this.applyLogRotationLines(actionArgument);
+        } else {
+          this.showInfo(
+            `Current rotation_lines: ${this.settingsManager.getLogRotationLines()}. ` +
+              "Usage: /log rotation_lines <number> (0 disables rotation)",
+          );
+        }
+        return;
+      case "level":
+      case "levels":
+        this.showLogLevelsSelector();
+        return;
+      default:
+        this.showWarning(
+          `Unknown /log subcommand: ${action}. Try: view | enable | disable | mode | rotation_lines | level`,
+        );
+        return;
+    }
+  }
 
-    this.chatContainer.addChild(new Spacer(1));
-    this.chatContainer.addChild(
-      new Text(`${theme.fg("accent", "✓ Debug log written")}\n${theme.fg("muted", debugLogPath)}`, 1, 1),
+  private applyLogMode(mode: LogMode): void {
+    this.settingsManager.setLogMode(mode);
+    this.applyLoggerConfig();
+    getLogger().info("log.mode", { mode });
+    this.showInfo(`Log mode set to ${mode}. File: ${getLogFilePath()}`);
+  }
+
+  private applyLogRotationLines(arg: string): void {
+    const parsed = Number.parseInt(arg, 10);
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      this.showWarning(`Invalid rotation_lines value: ${arg}. Must be an integer >= 0.`);
+      return;
+    }
+    this.settingsManager.setLogRotationLines(parsed);
+    this.applyLoggerConfig();
+    getLogger().info("log.rotation_lines", { rotation_lines: this.settingsManager.getLogRotationLines() });
+    this.showInfo(
+      parsed === 0
+        ? "Log rotation disabled (rotation_lines=0)."
+        : `Log rotation set to ${this.settingsManager.getLogRotationLines()} lines.`,
     );
+  }
+
+  private printLogFile(): void {
+    const logPath = getLogFilePath();
+    const exists = fs.existsSync(logPath);
+    const tail = exists ? readLogTail(40) : "";
+    const lines = [`${theme.fg("accent", "Log file")}: ${theme.fg("muted", logPath)}`];
+    if (!exists) {
+      lines.push(theme.fg("muted", "(no log file yet)"));
+    } else if (!tail) {
+      lines.push(theme.fg("muted", "(empty)"));
+    } else {
+      lines.push("");
+      lines.push(theme.fg("muted", "Recent entries:"));
+      lines.push(tail);
+    }
+    this.chatContainer.addChild(new Spacer(1));
+    this.chatContainer.addChild(new Text(lines.join("\n"), 1, 1));
     this.ui.requestRender();
+  }
+
+  private showInfo(message: string): void {
+    this.chatContainer.addChild(new Spacer(1));
+    this.chatContainer.addChild(new Text(`${theme.fg("accent", "✓")} ${message}`, 1, 1));
+    this.ui.requestRender();
+  }
+
+  private showLogActionsSelector(): void {
+    this.showSelector((done) => {
+      const selector = new LogActionsSelectorComponent(
+        this.settingsManager.getLogEnabled(),
+        (action) => {
+          done();
+          void this.handleLogAction(action);
+        },
+        () => {
+          done();
+          this.ui.requestRender();
+        },
+      );
+      return { component: selector, focus: selector.getSelectList() };
+    });
+  }
+
+  private async handleLogAction(action: LogAction): Promise<void> {
+    switch (action) {
+      case "view":
+        this.printLogFile();
+        return;
+      case "enable":
+        this.settingsManager.setLogEnabled(true);
+        this.applyLoggerConfig();
+        getLogger().info("log.enabled");
+        this.showInfo(`Logging enabled. File: ${getLogFilePath()}`);
+        return;
+      case "disable":
+        getLogger().info("log.disabled");
+        this.settingsManager.setLogEnabled(false);
+        this.applyLoggerConfig();
+        this.showInfo("Logging disabled.");
+        return;
+      case "mode":
+        this.showLogModeSelector();
+        return;
+      case "rotation_lines":
+        this.showInfo(
+          `Current rotation_lines: ${this.settingsManager.getLogRotationLines()}. ` +
+            "Use '/log rotation_lines <number>' to change (0 disables).",
+        );
+        return;
+      case "level":
+        this.showLogLevelsSelector();
+        return;
+    }
+  }
+
+  private showLogModeSelector(): void {
+    this.showSelector((done) => {
+      const selector = new LogModeSelectorComponent(
+        this.settingsManager.getLogMode(),
+        (mode) => {
+          done();
+          this.applyLogMode(mode);
+        },
+        () => {
+          done();
+          this.ui.requestRender();
+        },
+      );
+      return { component: selector, focus: selector.getSelectList() };
+    });
+  }
+
+  private showLogLevelsSelector(): void {
+    this.showSelector((done) => {
+      const selector = new LogLevelsSelectorComponent(
+        this.settingsManager.getLogLevels(),
+        (levels: LogLevel[]) => {
+          this.settingsManager.setLogLevels(levels);
+          this.applyLoggerConfig();
+          getLogger().info("log.level", { level: levels });
+          done();
+          this.showInfo(`Log levels set to: ${this.settingsManager.getLogLevels().join(", ") || "(none)"}`);
+        },
+        () => {
+          done();
+          this.ui.requestRender();
+        },
+        (levels: LogLevel[]) => {
+          this.settingsManager.setLogLevels(levels);
+          this.applyLoggerConfig();
+          this.ui.requestRender();
+        },
+      );
+      return { component: selector, focus: selector.getList() };
+    });
   }
 
   private async handleCompactCommand(customInstructions?: string): Promise<void> {

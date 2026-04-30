@@ -90,8 +90,12 @@ export function getExamplesPath(): string {
 	return resolve(join(getPackageDir(), "examples"));
 }
 
-export function getDebugLogPath(): string {
-	return join(getAgentDir(), "debug.log");
+export function getLogPath(): string {
+	return join(getAgentDir(), "akah.log");
+}
+
+export function isDevMode(): boolean {
+	return process.env.ENVIRONMENT === "dev";
 }
 
 export function getShareViewerUrl(): string {

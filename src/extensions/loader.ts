@@ -20,6 +20,7 @@ import * as _bundledTypeboxValue from "@sinclair/typebox/value";
 import { CONFIG_DIR_NAME, getAgentDir, isBunBinary } from "../config.js";
 import * as _bundledAiCli from "../index.js";
 import { createEventBus, type EventBus } from "../session/event-bus.js";
+import { getLogger } from "../session/logger.js";
 import type { ExecOptions } from "../session/exec.js";
 import { execCommand } from "../session/exec.js";
 import { createSyntheticSourceInfo } from "../session/source-info.js";
@@ -415,11 +416,18 @@ export async function loadExtensions(paths: string[], cwd: string, eventBus?: Ev
 		const { extension, error } = await loadExtension(extPath, cwd, resolvedEventBus, runtime);
 
 		if (error) {
+			getLogger().error("extension.error", { path: extPath, error });
 			errors.push({ path: extPath, error });
 			continue;
 		}
 
 		if (extension) {
+			getLogger().info("extension.loaded", {
+				path: extPath,
+				resolvedPath: extension.resolvedPath,
+				tools: Array.from(extension.tools.keys()),
+				commands: Array.from(extension.commands.keys()),
+			});
 			extensions.push(extension);
 		}
 	}

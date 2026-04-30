@@ -21,8 +21,8 @@
   },
   "scripts": {
     "build": "tsc",
-    "start": "node dist/cli/main.js",
-    "dev": "tsx src/cli/main.ts",
+    "start": "node --env-file-if-exists=.env dist/cli/main.js",
+    "dev": "tsx --env-file-if-exists=.env src/cli/main.ts",
     "smoke": "npm run build && node scripts/smoke.mjs",
     "check": "biome check --write . && tsc --noEmit",
     "format": "biome format --write ."

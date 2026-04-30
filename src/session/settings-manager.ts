@@ -4,6 +4,7 @@ import { homedir } from "os";
 import { dirname, join } from "path";
 import lockfile from "proper-lockfile";
 import { CONFIG_DIR_NAME, getAgentDir } from "../config.js";
+import { LOG_LEVELS, type LogLevel, type LogMode } from "./logger.js";
 
 export interface CompactionSettings {
 	enabled?: boolean; // default: true
@@ -53,6 +54,13 @@ export interface MarkdownSettings {
 }
 
 export interface WarningSettings {}
+
+export interface LogSettings {
+	enabled?: boolean; // default: false
+	mode?: LogMode; // default: "app"
+	rotation_lines?: number; // default: 10000; 0 disables rotation
+	level?: LogLevel[]; // default: ["info"]
+}
 
 export type TransportSetting = Transport;
 
@@ -108,6 +116,7 @@ export interface Settings {
 	markdown?: MarkdownSettings;
 	warnings?: WarningSettings;
 	sessionDir?: string; // Custom session storage directory (same format as --session-dir CLI flag)
+	log?: LogSettings;
 }
 
 /** Deep merge settings: project/overrides take precedence, nested objects merge recursively */
@@ -1069,5 +1078,71 @@ export class SettingsManager {
 		this.globalSettings.warnings = { ...warnings };
 		this.markModified("warnings");
 		this.save();
+	}
+
+	getLogEnabled(): boolean {
+		return this.settings.log?.enabled ?? false;
+	}
+
+	setLogEnabled(enabled: boolean): void {
+		if (!this.globalSettings.log) {
+			this.globalSettings.log = {};
+		}
+		this.globalSettings.log.enabled = enabled;
+		this.markModified("log", "enabled");
+		this.save();
+	}
+
+	getLogMode(): LogMode {
+		return this.settings.log?.mode ?? "app";
+	}
+
+	setLogMode(mode: LogMode): void {
+		if (!this.globalSettings.log) {
+			this.globalSettings.log = {};
+		}
+		this.globalSettings.log.mode = mode;
+		this.markModified("log", "mode");
+		this.save();
+	}
+
+	getLogRotationLines(): number {
+		return this.settings.log?.rotation_lines ?? 10000;
+	}
+
+	setLogRotationLines(lines: number): void {
+		const clamped = Math.max(0, Math.min(1_000_000, Math.floor(Number.isFinite(lines) ? lines : 0)));
+		if (!this.globalSettings.log) {
+			this.globalSettings.log = {};
+		}
+		this.globalSettings.log.rotation_lines = clamped;
+		this.markModified("log", "rotation_lines");
+		this.save();
+	}
+
+	getLogLevels(): LogLevel[] {
+		const stored = this.settings.log?.level;
+		if (!stored || stored.length === 0) return ["info"];
+		const valid = stored.filter((l): l is LogLevel => (LOG_LEVELS as ReadonlyArray<string>).includes(l));
+		return valid.length > 0 ? valid : ["info"];
+	}
+
+	setLogLevels(levels: LogLevel[]): void {
+		const valid = levels.filter((l): l is LogLevel => (LOG_LEVELS as ReadonlyArray<string>).includes(l));
+		if (!this.globalSettings.log) {
+			this.globalSettings.log = {};
+		}
+		this.globalSettings.log.level = valid;
+		this.markModified("log", "level");
+		this.save();
+	}
+
+	getLogSettings(): { enabled: boolean; mode: LogMode; rotation_lines: number; level: LogLevel[] } {
+		return {
+			enabled: this.getLogEnabled(),
+			mode: this.getLogMode(),
+			rotation_lines: this.getLogRotationLines(),
+			level: this.getLogLevels(),
+		};
 	}
 }

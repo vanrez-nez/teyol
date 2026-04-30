@@ -11,6 +11,7 @@ import {
 	type ToolResultMessage,
 	validateToolArguments,
 } from "../ai/index.js";
+import { getLogger } from "../session/logger.js";
 import type {
 	AgentContext,
 	AgentEvent,
@@ -246,12 +247,19 @@ async function streamAssistantResponse(
 ): Promise<AssistantMessage> {
 	// Apply context transform if configured (AgentMessage[] → AgentMessage[])
 	let messages = context.messages;
+	const beforeCount = messages.length;
 	if (config.transformContext) {
 		messages = await config.transformContext(messages, signal);
+		getLogger().debug("context.transform", { in: beforeCount, out: messages.length });
 	}
 
 	// Convert to LLM-compatible messages (AgentMessage[] → Message[])
 	const llmMessages = await config.convertToLlm(messages);
+	getLogger().debug("prompt.preprovider", {
+		systemPrompt: context.systemPrompt,
+		messages: llmMessages,
+		toolCount: context.tools.length,
+	});
 
 	// Build LLM context
 	const llmContext: Context = {
@@ -369,6 +377,7 @@ async function executeToolCallsSequential(
 	const messages: ToolResultMessage[] = [];
 
 	for (const toolCall of toolCalls) {
+		getLogger().info("tool.start", { id: toolCall.id, name: toolCall.name, args: toolCall.arguments });
 		await emit({
 			type: "tool_execution_start",
 			toolCallId: toolCall.id,
@@ -396,6 +405,11 @@ async function executeToolCallsSequential(
 			);
 		}
 
+		if (finalized.isError) {
+			getLogger().error("tool.error", { id: toolCall.id, name: toolCall.name, result: finalized.result });
+		} else {
+			getLogger().info("tool.end", { id: toolCall.id, name: toolCall.name });
+		}
 		await emitToolExecutionEnd(finalized, emit);
 		const toolResultMessage = createToolResultMessage(finalized);
 		await emitToolResultMessage(toolResultMessage, emit);
@@ -420,6 +434,7 @@ async function executeToolCallsParallel(
 	const finalizedCalls: FinalizedToolCallEntry[] = [];
 
 	for (const toolCall of toolCalls) {
+		getLogger().info("tool.start", { id: toolCall.id, name: toolCall.name, args: toolCall.arguments });
 		await emit({
 			type: "tool_execution_start",
 			toolCallId: toolCall.id,
@@ -434,6 +449,11 @@ async function executeToolCallsParallel(
 				result: preparation.result,
 				isError: preparation.isError,
 			} satisfies FinalizedToolCallOutcome;
+			if (finalized.isError) {
+				getLogger().error("tool.error", { id: toolCall.id, name: toolCall.name, result: finalized.result });
+			} else {
+				getLogger().info("tool.end", { id: toolCall.id, name: toolCall.name });
+			}
 			await emitToolExecutionEnd(finalized, emit);
 			finalizedCalls.push(finalized);
 			continue;
@@ -449,6 +469,11 @@ async function executeToolCallsParallel(
 				config,
 				signal,
 			);
+			if (finalized.isError) {
+				getLogger().error("tool.error", { id: toolCall.id, name: toolCall.name, result: finalized.result });
+			} else {
+				getLogger().info("tool.end", { id: toolCall.id, name: toolCall.name });
+			}
 			await emitToolExecutionEnd(finalized, emit);
 			return finalized;
 		});

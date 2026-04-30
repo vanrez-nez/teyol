@@ -10,6 +10,7 @@ import type {
   ChatCompletionSystemMessageParam,
   ChatCompletionToolMessageParam,
 } from "openai/resources/chat/completions.js";
+import { getLogger } from "../../session/logger.js";
 import { getEnvApiKey } from "../env-api-keys.js";
 import { calculateCost, supportsXhigh } from "../models.js";
 import type {
@@ -143,6 +144,13 @@ export const streamOpenAICompletions: StreamFunction<"openai-completions", OpenA
       if (nextParams !== undefined) {
         params = nextParams as OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming;
       }
+      getLogger().debug("provider.request", {
+        api: model.api,
+        provider: model.provider,
+        model: model.id,
+        payload: params,
+        tools: params.tools,
+      });
       const requestOptions = {
         ...(options?.signal ? { signal: options.signal } : {}),
         ...(options?.timeoutMs !== undefined ? { timeout: options.timeoutMs } : {}),
@@ -151,7 +159,15 @@ export const streamOpenAICompletions: StreamFunction<"openai-completions", OpenA
       const { data: openaiStream, response } = await client.chat.completions
         .create(params, requestOptions)
         .withResponse();
-      await options?.onResponse?.({ status: response.status, headers: headersToRecord(response.headers) }, model);
+      const responseHeaders = headersToRecord(response.headers);
+      getLogger().debug("provider.response", {
+        api: model.api,
+        provider: model.provider,
+        model: model.id,
+        status: response.status,
+        headers: responseHeaders,
+      });
+      await options?.onResponse?.({ status: response.status, headers: responseHeaders }, model);
       stream.push({ type: "start", partial: output });
 
       interface StreamingToolCallBlock extends ToolCall {
@@ -374,6 +390,12 @@ export const streamOpenAICompletions: StreamFunction<"openai-completions", OpenA
       stream.push({ type: "done", reason: output.stopReason, message: output });
       stream.end();
     } catch (error) {
+      getLogger().error("provider.error", {
+        api: model.api,
+        provider: model.provider,
+        model: model.id,
+        error,
+      });
       for (const block of output.content) {
         delete (block as { index?: number }).index;
         // Streaming scratch buffers are only used during parsing; never persist them.
