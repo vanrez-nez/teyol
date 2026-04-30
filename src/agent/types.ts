@@ -225,7 +225,7 @@ export interface AgentLoopConfig extends SimpleStreamOptions {
 
 /**
  * Thinking/reasoning level for models that support it.
- * Note: "xhigh" is only supported by selected model families. Use supportsXhigh() from @ai/index.js
+ * Note: "xhigh" is only supported by selected model families. Use supportsXhigh() from #ai/index.js
  * to detect support for a concrete model.
  */
 export type ThinkingLevel = "off" | "minimal" | "low" | "medium" | "high" | "xhigh";

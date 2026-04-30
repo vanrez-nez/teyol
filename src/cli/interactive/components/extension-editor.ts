@@ -16,7 +16,7 @@ import {
 	Spacer,
 	Text,
 	type TUI,
-} from "@tui/index.js";
+} from "#tui/index.js";
 import type { KeybindingsManager } from "../../../session/keybindings.js";
 import { getEditorTheme, theme } from "../theme/theme.js";
 import { DynamicBorder } from "./dynamic-border.js";

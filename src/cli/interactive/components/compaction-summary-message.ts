@@ -1,4 +1,4 @@
-import { Box, Markdown, type MarkdownTheme, Spacer, Text } from "@tui/index.js";
+import { Box, Markdown, type MarkdownTheme, Spacer, Text } from "#tui/index.js";
 import type { CompactionSummaryMessage } from "../../../session/messages.js";
 import { getMarkdownTheme, theme } from "../theme/theme.js";
 import { keyText } from "./keybinding-hints.js";

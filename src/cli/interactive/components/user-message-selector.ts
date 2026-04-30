@@ -1,4 +1,4 @@
-import { type Component, Container, getKeybindings, Spacer, Text, truncateToWidth } from "@tui/index.js";
+import { type Component, Container, getKeybindings, Spacer, Text, truncateToWidth } from "#tui/index.js";
 import { theme } from "../theme/theme.js";
 import { DynamicBorder } from "./dynamic-border.js";
 

@@ -5,8 +5,8 @@
  * Responses and events are emitted as JSON lines on stdout.
  */
 
-import type { AgentMessage, ThinkingLevel } from "@agent/index.js";
-import type { ImageContent, Model } from "@ai/index.js";
+import type { AgentMessage, ThinkingLevel } from "#agent/index.js";
+import type { ImageContent, Model } from "#ai/index.js";
 import type { SessionStats } from "../../session/agent-session.js";
 import type { CompactionResult } from "../../session/compaction/index.js";
 import type { SourceInfo } from "../../session/source-info.js";

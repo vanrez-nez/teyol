@@ -1,5 +1,5 @@
-import { getOAuthProviders } from "@ai/oauth.js";
-import { Container, type Focusable, getKeybindings, Input, Spacer, Text, type TUI } from "@tui/index.js";
+import { getOAuthProviders } from "#ai/oauth.js";
+import { Container, type Focusable, getKeybindings, Input, Spacer, Text, type TUI } from "#tui/index.js";
 import { exec } from "child_process";
 import { theme } from "../theme/theme.js";
 import { DynamicBorder } from "./dynamic-border.js";

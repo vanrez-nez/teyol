@@ -8,7 +8,7 @@ import {
 	Text,
 	TruncatedText,
 	truncateToWidth,
-} from "@tui/index.js";
+} from "#tui/index.js";
 import type { SessionTreeNode } from "../../../session/session-manager.js";
 import { theme } from "../theme/theme.js";
 import { DynamicBorder } from "./dynamic-border.js";

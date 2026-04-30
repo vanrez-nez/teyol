@@ -1,7 +1,7 @@
 {
   "name": "ai-cli",
   "version": "0.1.0",
-  "description": "A generic, extendable AI agent CLI extracted from pi-mono.",
+  "description": "A generic, extendable AI assistant CLI.",
   "type": "module",
   "main": "dist/cli/main.js",
   "bin": {
@@ -11,10 +11,19 @@
     "name": "ai",
     "configDir": ".ai-cli"
   },
+  "imports": {
+    "#ai/*": "./dist/ai/*",
+    "#agent/*": "./dist/agent/*",
+    "#tui/*": "./dist/tui/*",
+    "#session/*": "./dist/session/*",
+    "#extensions/*": "./dist/extensions/*",
+    "#cli/*": "./dist/cli/*"
+  },
   "scripts": {
     "build": "tsc",
     "start": "node dist/cli/main.js",
     "dev": "tsx src/cli/main.ts",
+    "smoke": "npm run build && node scripts/smoke.mjs",
     "check": "biome check --write . && tsc --noEmit",
     "format": "biome format --write ."
   },

@@ -14,7 +14,7 @@ import type {
 	AgentToolUpdateCallback,
 	ThinkingLevel,
 	ToolExecutionMode,
-} from "@agent/types.js";
+} from "#agent/types.js";
 import type {
 	Api,
 	AssistantMessageEvent,
@@ -28,11 +28,11 @@ import type {
 	Tool,
 	ToolCall,
 	ToolResultMessage,
-} from "@ai/types.js";
+} from "#ai/types.js";
 import type {
 	OAuthCredentials,
 	OAuthLoginCallbacks,
-} from "@ai/oauth.js";
+} from "#ai/oauth.js";
 import type {
 	AutocompleteItem,
 	AutocompleteProvider,
@@ -43,7 +43,7 @@ import type {
 	OverlayHandle,
 	OverlayOptions,
 	TUI,
-} from "@tui/index.js";
+} from "#tui/index.js";
 import type { Static, TSchema } from "@sinclair/typebox";
 import type { CompactionPreparation, CompactionResult } from "../session/compaction/index.js";
 import type { ModelRegistry } from "../session/model-registry.js";
@@ -648,15 +648,15 @@ export interface ModelSelectEvent {
 }
 
 // ============================================================================
-// User Bash Events (kept for generic shell if needed)
+// User Shell Events (kept for extension compatibility)
 // ============================================================================
 
-/** Fired when user executes a shell command via ! or !! prefix */
+/** Fired when an extension-compatible shell command event is emitted. */
 export interface UserBashEvent {
 	type: "user_bash";
-	/** The command to execute */
+	/** The command to execute. */
 	command: string;
-	/** True if !! prefix was used (excluded from LLM context) */
+	/** True if the command should be excluded from LLM context. */
 	excludeFromContext: boolean;
 	/** Current working directory */
 	cwd: string;
@@ -760,7 +760,7 @@ export interface ToolCallEventResult {
 	reason?: string;
 }
 
-/** Result from user_bash event handler */
+/** Result from a user_bash event handler. */
 export interface UserBashEventResult {
 	/** Full replacement: extension handled execution, use this result */
 	result?: any;

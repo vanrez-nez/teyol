@@ -2,10 +2,8 @@
  * Main entry point for the AI CLI.
  */
 
-import { resolve } from "node:path";
 import { createInterface } from "node:readline";
-import { modelsAreEqual, supportsXhigh } from "@ai/index.js";
-import { ProcessTerminal, setKeybindings, TUI } from "@tui/index.js";
+import { modelsAreEqual } from "#ai/index.js";
 import chalk from "chalk";
 import { type Args, type Mode, parseArgs, printHelp } from "./args.js";
 import { processFileArguments } from "./file-processor.js";
@@ -19,9 +17,7 @@ import {
 	createAgentSessionFromServices,
 	createAgentSessionServices,
 } from "../session/agent-session-services.js";
-import { formatNoModelsAvailableMessage } from "../session/auth-guidance.js";
 import { AuthStorage } from "../session/auth-storage.js";
-import { KeybindingsManager } from "../session/keybindings.js";
 import type { ModelRegistry } from "../session/model-registry.js";
 import { resolveCliModel, resolveModelScope, type ScopedModel } from "../session/model-resolver.js";
 import { SessionManager } from "../session/session-manager.js";
@@ -30,7 +26,6 @@ import { InteractiveMode } from "./interactive-mode.js";
 import { runPrintMode } from "./print-mode.js";
 import { runRpcMode } from "./rpc/rpc-mode.js";
 import { initTheme, stopThemeWatcher } from "./interactive/theme/theme.js";
-import { isLocalPath } from "../utils/paths.js";
 
 /**
  * Read all content from piped stdin.
@@ -215,8 +210,6 @@ function buildSessionOptions(
 
 	if (parsed.noTools) {
 		options.noTools = "all";
-	} else if (parsed.noBuiltinTools) {
-		options.noTools = "builtin";
 	}
 	if (parsed.tools) {
 		options.tools = [...parsed.tools];
@@ -230,6 +223,17 @@ export async function main(args: string[]) {
 	if (parsed.help) {
 		printHelp();
 		process.exit(0);
+	}
+
+	if (parsed.diagnostics.length > 0) {
+		for (const diagnostic of parsed.diagnostics) {
+			const color = diagnostic.type === "error" ? chalk.red : chalk.yellow;
+			const prefix = diagnostic.type === "error" ? "Error: " : "Warning: ";
+			console.error(color(`${prefix}${diagnostic.message}`));
+		}
+		if (parsed.diagnostics.some((diagnostic) => diagnostic.type === "error")) {
+			process.exit(1);
+		}
 	}
 
 	if (parsed.version) {
@@ -263,14 +267,15 @@ export async function main(args: string[]) {
 				noContextFiles: parsed.noContextFiles,
 				systemPrompt: parsed.systemPrompt,
 				appendSystemPrompt: parsed.appendSystemPrompt,
-			}
+			},
+			extensionFlagValues: parsed.unknownFlags,
 		});
 		
 		const { settingsManager, modelRegistry } = services;
 		const modelPatterns = parsed.models ?? settingsManager.getEnabledModels();
 		const scopedModels = modelPatterns ? await resolveModelScope(modelPatterns, modelRegistry) : [];
 		
-		const { options: sessionOptions, cliThinkingFromModel, diagnostics } = buildSessionOptions(
+		const { options: sessionOptions, diagnostics } = buildSessionOptions(
 			parsed,
 			scopedModels,
 			sessionManager.buildSessionContext().messages.length > 0,
@@ -298,6 +303,13 @@ export async function main(args: string[]) {
 
 	const { session, modelFallbackMessage } = runtime;
 	const { settingsManager, modelRegistry } = runtime.services;
+	const runtimeDiagnostics = [...runtime.services.diagnostics, ...(runtime.diagnostics ?? [])];
+	if (runtimeDiagnostics.length > 0) {
+		reportDiagnostics(runtimeDiagnostics);
+		if (runtimeDiagnostics.some((diagnostic) => diagnostic.type === "error")) {
+			process.exit(1);
+		}
+	}
 
 	if (parsed.listModels) {
 		await listModels(modelRegistry, typeof parsed.listModels === "string" ? parsed.listModels : undefined);
@@ -332,3 +344,8 @@ export async function main(args: string[]) {
 		process.exit(exitCode);
 	}
 }
+
+main(process.argv.slice(2)).catch((error) => {
+	console.error(error);
+	process.exit(1);
+});

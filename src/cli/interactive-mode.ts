@@ -1,5 +1,5 @@
 /**
- * Interactive mode for the coding agent.
+ * Interactive mode for the AI CLI.
  * Handles TUI rendering and user interaction, delegating business logic to AgentSession.
  */
 
@@ -7,7 +7,7 @@ import * as crypto from "node:crypto";
 import fs from "fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import type { AgentMessage } from "@agent/index.js";
+import type { AgentMessage } from "#agent/index.js";
 import {
 	type AssistantMessage,
 	getProviders,
@@ -15,7 +15,7 @@ import {
 	type Message,
 	type Model,
 	type OAuthProviderId,
-} from "@ai/index.js";
+} from "#ai/index.js";
 import type {
 	AutocompleteItem,
 	AutocompleteProvider,
@@ -26,7 +26,7 @@ import type {
 	OverlayHandle,
 	OverlayOptions,
 	SlashCommand,
-} from "@tui/index.js";
+} from "#tui/index.js";
 import {
 	CombinedAutocompleteProvider,
 	type Component,
@@ -43,7 +43,7 @@ import {
 	TruncatedText,
 	TUI,
 	visibleWidth,
-} from "@tui/index.js";
+} from "#tui/index.js";
 import { spawn, spawnSync } from "child_process";
 import {
 	APP_NAME,
@@ -259,7 +259,7 @@ export class InteractiveMode {
 	private unsubscribe?: () => void;
 	private signalCleanupHandlers: Array<() => void> = [];
 
-	// Track if editor is in bash mode (text starts with !)
+	// Shell-like input shortcuts are intentionally extension-owned in the generic CLI.
 
 	// Track current bash execution component
 
@@ -727,7 +727,7 @@ export class InteractiveMode {
 	}
 
 	private async checkForPackageUpdates(): Promise<string[]> {
-		if (process.env.PI_OFFLINE) {
+		if (process.env.AI_OFFLINE ?? process.env.PI_OFFLINE) {
 			return [];
 		}
 
@@ -2349,11 +2349,6 @@ export class InteractiveMode {
 				this.editor.setText("");
 				return;
 			}
-			if (text === "/share") {
-				await this.handleShareCommand();
-				this.editor.setText("");
-				return;
-			}
 			if (text === "/name" || text.startsWith("/name ")) {
 				this.handleNameCommand(text);
 				this.editor.setText("");
@@ -3241,7 +3236,7 @@ export class InteractiveMode {
 		}
 
 		const currentText = this.editor.getExpandedText?.() ?? this.editor.getText();
-		const tmpFile = path.join(os.tmpdir(), `pi-editor-${Date.now()}.pi.md`);
+		const tmpFile = path.join(os.tmpdir(), `ai-editor-${Date.now()}.md`);
 
 		try {
 			// Write current content to temp file
@@ -4959,9 +4954,7 @@ export class InteractiveMode {
 | \`${dequeue}\` | Restore queued messages |
 | \`${pasteImage}\` | Paste image from clipboard |
 | \`/\` | Slash commands |
-| \`!\` | Run bash command |
-| \`!!\` | Run bash command (excluded from context) |
-`;
+	`;
 
 		// Add extension-registered shortcuts
 		const extensionRunner = this.session.extensionRunner;

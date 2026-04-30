@@ -1,5 +1,5 @@
-import type { ThinkingLevel } from "@agent/index.js";
-import type { Transport } from "@ai/index.js";
+import type { ThinkingLevel } from "#agent/index.js";
+import type { Transport } from "#ai/index.js";
 import {
 	Container,
 	getCapabilities,
@@ -10,7 +10,7 @@ import {
 	SettingsList,
 	Spacer,
 	Text,
-} from "@tui/index.js";
+} from "#tui/index.js";
 import type { WarningSettings } from "../../../session/settings-manager.js";
 import { getSelectListTheme, getSettingsListTheme, theme } from "../theme/theme.js";
 import { DynamicBorder } from "./dynamic-border.js";

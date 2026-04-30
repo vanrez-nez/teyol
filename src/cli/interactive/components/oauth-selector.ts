@@ -6,7 +6,7 @@ import {
 	Input,
 	Spacer,
 	TruncatedText,
-} from "@tui/index.js";
+} from "#tui/index.js";
 import type { AuthStatus, AuthStorage } from "../../../session/auth-storage.js";
 import { theme } from "../theme/theme.js";
 import { DynamicBorder } from "./dynamic-border.js";

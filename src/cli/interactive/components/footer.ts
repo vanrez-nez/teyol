@@ -1,4 +1,4 @@
-import { type Component, truncateToWidth, visibleWidth } from "@tui/index.js";
+import { type Component, truncateToWidth, visibleWidth } from "#tui/index.js";
 import type { AgentSession } from "../../../session/agent-session.js";
 import type { ReadonlyFooterDataProvider } from "../../../session/footer-data-provider.js";
 import { theme } from "../theme/theme.js";

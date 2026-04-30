@@ -13,7 +13,7 @@ import {
 	Spacer,
 	truncateToWidth,
 	visibleWidth,
-} from "@tui/index.js";
+} from "#tui/index.js";
 import { CONFIG_DIR_NAME } from "../../../config.js";
 import type { PathMetadata, ResolvedPaths, ResolvedResource } from "../../../session/package-manager.js";
 import type { PackageSource, SettingsManager } from "../../../session/settings-manager.js";

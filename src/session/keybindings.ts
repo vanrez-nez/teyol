@@ -5,7 +5,7 @@ import {
 	type KeyId,
 	TUI_KEYBINDINGS,
 	KeybindingsManager as TuiKeybindingsManager,
-} from "@tui/index.js";
+} from "#tui/index.js";
 import { existsSync, readFileSync } from "fs";
 import { join } from "path";
 import { getAgentDir } from "../config.js";
@@ -56,7 +56,7 @@ export interface AppKeybindings {
 
 export type AppKeybinding = keyof AppKeybindings;
 
-declare module "@tui/index.js" {
+declare module "#tui/index.js" {
 	interface Keybindings extends AppKeybindings {}
 }
 

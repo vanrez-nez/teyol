@@ -5,9 +5,9 @@
  * and after compaction the session is reloaded.
  */
 
-import type { AgentMessage, ThinkingLevel } from "@agent/types.js";
-import type { AssistantMessage, Model, Usage } from "@ai/index.js";
-import { completeSimple } from "@ai/index.js";
+import type { AgentMessage, ThinkingLevel } from "#agent/types.js";
+import type { AssistantMessage, Model, Usage } from "#ai/index.js";
+import { completeSimple } from "#ai/index.js";
 import {
 	convertToLlm,
 	createBranchSummaryMessage,

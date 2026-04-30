@@ -5,9 +5,9 @@
  * a summary of the branch being left so context isn't lost.
  */
 
-import type { AgentMessage } from "@agent/types.js";
-import type { Model } from "@ai/types.js";
-import { completeSimple } from "@ai/index.js";
+import type { AgentMessage } from "#agent/types.js";
+import type { Model } from "#ai/types.js";
+import { completeSimple } from "#ai/index.js";
 import {
 	convertToLlm,
 	createBranchSummaryMessage,

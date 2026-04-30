@@ -1,5 +1,5 @@
-import type { AssistantMessage } from "@ai/index.js";
-import { Container, Markdown, type MarkdownTheme, Spacer, Text } from "@tui/index.js";
+import type { AssistantMessage } from "#ai/index.js";
+import { Container, Markdown, type MarkdownTheme, Spacer, Text } from "#tui/index.js";
 import { getMarkdownTheme, theme } from "../theme/theme.js";
 
 const OSC133_ZONE_START = "\x1b]133;A\x07";

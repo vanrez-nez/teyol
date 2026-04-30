@@ -3,7 +3,7 @@
  */
 
 import { access, readFile, stat } from "node:fs/promises";
-import type { ImageContent } from "@ai/index.js";
+import type { ImageContent } from "#ai/index.js";
 import chalk from "chalk";
 import { resolve } from "node:path";
 import { detectSupportedImageMimeTypeFromFile } from "../utils/mime.js";

@@ -1,6 +1,6 @@
 import { join } from "node:path";
-import { Agent, type AgentMessage, type ThinkingLevel } from "@agent/index.js";
-import { type Message, type Model, streamSimple } from "@ai/index.js";
+import { Agent, type AgentMessage, type ThinkingLevel } from "#agent/index.js";
+import { type Message, type Model, streamSimple } from "#ai/index.js";
 import { getAgentDir } from "../config.js";
 import { AgentSession } from "./agent-session.js";
 import { formatNoModelsAvailableMessage } from "./auth-guidance.js";
@@ -20,7 +20,7 @@ import { time } from "./timings.js";
 export interface CreateAgentSessionOptions {
 	/** Working directory for project-local discovery. Default: process.cwd() */
 	cwd?: string;
-	/** Global config directory. Default: ~/.pi/agent */
+	/** Global config directory. Default: ~/.ai-cli/agent */
 	agentDir?: string;
 
 	/** Auth storage for credentials. Default: AuthStorage.create(agentDir/auth.json) */
@@ -39,8 +39,7 @@ export interface CreateAgentSessionOptions {
 	 * Optional default tool suppression mode when no explicit allowlist is provided.
 	 *
 	 * - "all": start with no tools enabled
-	 * - "builtin": disable the default built-in tools (read, bash, edit, write)
-	 *   but keep extension/custom tools enabled
+	 * - "builtin": compatibility alias for the default behavior because this CLI ships no built-in tools
 	 */
 	noTools?: "all" | "builtin";
 	/**
@@ -50,7 +49,7 @@ export interface CreateAgentSessionOptions {
 	 * When provided, only the listed tool names are enabled.
 	 */
 	tools?: string[];
-	/** Custom tools to register (in addition to built-in tools). */
+	/** Custom tools to register in addition to extension-provided tools. */
 	customTools?: ToolDefinition[];
 
 	/** Resource loader. When omitted, DefaultResourceLoader is used. */
@@ -133,7 +132,7 @@ function getAttributionHeaders(
  * const { session } = await createAgentSession();
  *
  * // With explicit model
- * import { getModel } from '@ai/index.js';
+ * import { getModel } from '#ai/index.js';
  * const { session } = await createAgentSession({
  *   model: getModel('anthropic', 'claude-opus-4-5'),
  *   thinkingLevel: 'high',

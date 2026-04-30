@@ -5,7 +5,7 @@
  * Tool call and tool result interception is handled by AgentSession via agent-core hooks.
  */
 
-import type { AgentTool } from "@agent/types.js";
+import type { AgentTool } from "#agent/types.js";
 import { wrapToolDefinition, wrapToolDefinitions } from "../session/tool-definition-wrapper.js";
 import type { ExtensionRunner } from "./runner.js";
 import type { RegisteredTool } from "./types.js";

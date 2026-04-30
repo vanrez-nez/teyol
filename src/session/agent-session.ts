@@ -7,7 +7,6 @@
  * - Event subscription with automatic session persistence
  * - Model and thinking level management
  * - Compaction (manual and auto)
- * - Bash execution
  * - Session switching and branching
  *
  * Modes use this class and add their own I/O layer on top.
@@ -15,15 +14,15 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { basename, dirname, join, resolve } from "node:path";
-import { Agent, type AgentEvent } from "@agent/index.js";
+import { Agent, type AgentEvent } from "#agent/index.js";
 import type {
 	AgentMessage,
 	AgentState,
 	AgentTool,
 	ThinkingLevel,
-} from "@agent/types.js";
-import type { AssistantMessage, ImageContent, Message, Model, TextContent } from "@ai/types.js";
-import { isContextOverflow, modelsAreEqual, resetApiProviders, supportsXhigh } from "@ai/index.js";
+} from "#agent/types.js";
+import type { AssistantMessage, ImageContent, Message, Model, TextContent } from "#ai/types.js";
+import { isContextOverflow, modelsAreEqual, resetApiProviders, supportsXhigh } from "#ai/index.js";
 import { stripFrontmatter } from "../utils/frontmatter.js";
 import { sleep } from "../utils/sleep.js";
 import { formatNoApiKeyFoundMessage, formatNoModelSelectedMessage } from "./auth-guidance.js";
@@ -144,7 +143,7 @@ export interface AgentSessionConfig {
 	customTools?: ToolDefinition[];
 	/** Model registry for API key resolution and model discovery */
 	modelRegistry: ModelRegistry;
-	/** Initial active built-in tool names. Default: [read, edit, write] */
+	/** Initial active base tool names. Default: none. */
 	initialActiveToolNames?: string[];
 	/** Optional allowlist of tool names. When provided, only these tool names are exposed. */
 	allowedToolNames?: string[];
@@ -715,7 +714,7 @@ export class AgentSession {
 	 */
 	dispose(): void {
 		this._extensionRunner.invalidate(
-			"This extension ctx is stale after session replacement or reload. Do not use a captured pi or command ctx after ctx.newSession(), ctx.fork(), ctx.switchSession(), or ctx.reload(). For newSession, fork, and switchSession, move post-replacement work into withSession and use the ctx passed to withSession. For reload, do not use the old ctx after await ctx.reload().",
+			"This extension ctx is stale after session replacement or reload. Do not use a captured assistant or command ctx after ctx.newSession(), ctx.fork(), ctx.switchSession(), or ctx.reload(). For newSession, fork, and switchSession, move post-replacement work into withSession and use the ctx passed to withSession. For reload, do not use the old ctx after await ctx.reload().",
 		);
 		this._disconnectFromAgent();
 		this._eventListeners = [];
@@ -2308,9 +2307,6 @@ export class AgentSession {
 		flagValues?: Map<string, boolean | string>;
 		includeAllExtensionTools?: boolean;
 	}): void {
-		const autoResizeImages = this.settingsManager.getImageAutoResize();
-		const shellCommandPrefix = this.settingsManager.getShellCommandPrefix();
-		const shellPath = this.settingsManager.getShellPath();
 		const baseToolDefinitions = this._baseToolsOverride
 			? Object.fromEntries(
 					Object.entries(this._baseToolsOverride).map(([name, tool]) => [
@@ -2344,9 +2340,7 @@ export class AgentSession {
 		this._bindExtensionCore(this._extensionRunner);
 		this._applyExtensionBindings(this._extensionRunner);
 
-		const defaultActiveToolNames = this._baseToolsOverride
-			? Object.keys(this._baseToolsOverride)
-			: ["read", "edit", "write"];
+		const defaultActiveToolNames = this._baseToolsOverride ? Object.keys(this._baseToolsOverride) : [];
 		const baseActiveToolNames = options.activeToolNames ?? defaultActiveToolNames;
 		this._refreshToolRegistry({
 			activeToolNames: baseActiveToolNames,

@@ -28,7 +28,6 @@ export interface Args {
 	models?: string[];
 	tools?: string[];
 	noTools?: boolean;
-	noBuiltinTools?: boolean;
 	extensions?: string[];
 	noExtensions?: boolean;
 	print?: boolean;
@@ -41,7 +40,6 @@ export interface Args {
 	noThemes?: boolean;
 	noContextFiles?: boolean;
 	listModels?: string | true;
-	offline?: boolean;
 	verbose?: boolean;
 	messages: string[];
 	fileArgs: string[];
@@ -103,8 +101,6 @@ export function parseArgs(args: string[]): Args {
 			result.models = args[++i].split(",").map((s) => s.trim());
 		} else if (arg === "--no-tools" || arg === "-nt") {
 			result.noTools = true;
-		} else if (arg === "--no-builtin-tools" || arg === "-nbt") {
-			result.noBuiltinTools = true;
 		} else if ((arg === "--tools" || arg === "-t") && i + 1 < args.length) {
 			result.tools = args[++i]
 				.split(",")
@@ -155,8 +151,6 @@ export function parseArgs(args: string[]): Args {
 			}
 		} else if (arg === "--verbose") {
 			result.verbose = true;
-		} else if (arg === "--offline") {
-			result.offline = true;
 		} else if (arg.startsWith("@")) {
 			result.fileArgs.push(arg.slice(1)); // Remove @ prefix
 		} else if (arg.startsWith("--")) {
@@ -199,13 +193,8 @@ export function printHelp(extensionFlags?: ExtensionFlag[]): void {
 ${chalk.bold("Usage:")}
   ${APP_NAME} [options] [@files...] [messages...]
 
-${chalk.bold("Commands:")}
-  ${APP_NAME} update [source|self|pi]   Update pi and installed extensions
-  ${APP_NAME} config                    Open TUI to enable/disable resources
-  ${APP_NAME} <command> --help          Show help for update
-
 ${chalk.bold("Options:")}
-  --provider <name>              Provider name (default: google)
+  --provider <name>              Provider name
   --model <pattern>              Model pattern or ID (supports "provider/id" and optional ":<thinking>")
   --api-key <key>                API key (defaults to env vars)
   --system-prompt <text>         System prompt (default: generic assistant prompt)
@@ -219,8 +208,7 @@ ${chalk.bold("Options:")}
   --session-dir <dir>            Directory for session storage and lookup
   --no-session                   Don't save session (ephemeral)
   --models <patterns>            Comma-separated model patterns for Ctrl+P cycling
-  --no-tools, -nt                Disable all tools by default (built-in and extension)
-  --no-builtin-tools, -nbt       Disable built-in tools by default but keep extension/custom tools enabled
+  --no-tools, -nt                Disable all extension/custom tools
   --tools, -t <tools>            Comma-separated allowlist of tool names to enable
   --thinking <level>             Set thinking level: off, minimal, low, medium, high, xhigh
   --extension, -e <path>         Load an extension file (can be used multiple times)
@@ -235,7 +223,6 @@ ${chalk.bold("Options:")}
   --export <file>                Export session file to HTML and exit
   --list-models [search]         List available models
   --verbose                      Force verbose startup
-  --offline                      Disable startup network operations
   --help, -h                     Show this help
   --version, -v                  Show version number
 
@@ -254,14 +241,8 @@ ${chalk.bold("Examples:")}
 ${chalk.bold("Environment Variables:")}
   ANTHROPIC_API_KEY, OPENAI_API_KEY, GEMINI_API_KEY, etc.
   ${ENV_AGENT_DIR.padEnd(32)} - Session storage directory
-  PI_OFFLINE                       - Disable startup network operations
 
-${chalk.bold("Built-in Tool Names:")}
-  read   - Read file contents
-  bash   - Execute bash commands
-  write  - Write files
-  grep   - Search file contents
-  find   - Find files
-  ls     - List directory contents
+${chalk.bold("Tools:")}
+  Tools are provided by extensions or SDK custom tool registration.
 `);
 }

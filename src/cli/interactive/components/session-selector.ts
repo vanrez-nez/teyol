@@ -12,7 +12,7 @@ import {
 	Text,
 	truncateToWidth,
 	visibleWidth,
-} from "@tui/index.js";
+} from "#tui/index.js";
 import { KeybindingsManager } from "../../../session/keybindings.js";
 import type { SessionInfo, SessionListProgress } from "../../../session/session-manager.js";
 import { canonicalizePath as _canonicalizePath } from "../../../utils/paths.js";

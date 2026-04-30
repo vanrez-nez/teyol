@@ -10,7 +10,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import { fileURLToPath } from "node:url";
 import { createJiti } from "@mariozechner/jiti";
-import type { KeyId } from "@tui/index.js";
+import type { KeyId } from "#tui/index.js";
 // Static imports of packages that extensions may use.
 // These MUST be static so Bun bundles them into the compiled binary.
 // The virtualModules option then makes them available to extensions.
@@ -18,7 +18,7 @@ import * as _bundledTypebox from "@sinclair/typebox";
 import * as _bundledTypeboxCompile from "@sinclair/typebox/compiler";
 import * as _bundledTypeboxValue from "@sinclair/typebox/value";
 import { CONFIG_DIR_NAME, getAgentDir, isBunBinary } from "../config.js";
-import * as _bundledPiMono from "../index.js";
+import * as _bundledAiCli from "../index.js";
 import { createEventBus, type EventBus } from "../session/event-bus.js";
 import type { ExecOptions } from "../session/exec.js";
 import { execCommand } from "../session/exec.js";
@@ -43,7 +43,8 @@ const VIRTUAL_MODULES: Record<string, unknown> = {
 	"@sinclair/typebox": _bundledTypebox,
 	"@sinclair/typebox/compiler": _bundledTypeboxCompile,
 	"@sinclair/typebox/value": _bundledTypeboxValue,
-	"@pi-mono": _bundledPiMono,
+	"@ai-cli": _bundledAiCli,
+	"@pi-mono": _bundledAiCli,
 };
 
 const require = createRequire(import.meta.url);
@@ -75,6 +76,7 @@ function getAliases(): Record<string, string> {
 
 	_aliases = {
 		"@pi-mono": packageIndex,
+		"@ai-cli": packageIndex,
 		typebox: typeboxEntry,
 		"typebox/compiler": typeboxCompileEntry,
 		"typebox/value": typeboxValueEntry,
@@ -150,7 +152,7 @@ export function createExtensionRuntime(): ExtensionRuntime {
 		invalidate: (message) => {
 			state.staleMessage ??=
 				message ??
-				"This extension ctx is stale after session replacement or reload. Do not use a captured pi or command ctx after ctx.newSession(), ctx.fork(), ctx.switchSession(), or ctx.reload(). For newSession, fork, and switchSession, move post-replacement work into withSession and use the ctx passed to withSession. For reload, do not use the old ctx after await ctx.reload().";
+					"This extension ctx is stale after session replacement or reload. Do not use a captured assistant or command ctx after ctx.newSession(), ctx.fork(), ctx.switchSession(), or ctx.reload(). For newSession, fork, and switchSession, move post-replacement work into withSession and use the ctx passed to withSession. For reload, do not use the old ctx after await ctx.reload().";
 		},
 		// Pre-bind: queue registrations so bindCore() can flush them once the
 		// model registry is available. bindCore() replaces both with direct calls.

@@ -17,8 +17,8 @@ import {
 	registerApiProvider,
 	resetApiProviders,
 	type SimpleStreamOptions,
-} from "@ai/index.js";
-import { registerOAuthProvider, resetOAuthProviders } from "@ai/oauth.js";
+} from "#ai/index.js";
+import { registerOAuthProvider, resetOAuthProviders } from "#ai/oauth.js";
 import { existsSync, readFileSync } from "fs";
 import { join } from "path";
 import { type Static, Type } from "@sinclair/typebox";

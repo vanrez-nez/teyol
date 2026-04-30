@@ -28,10 +28,10 @@ export function getPackageJsonPath(): string {
 
 const pkg = JSON.parse(readFileSync(getPackageJsonPath(), "utf-8"));
 
-export const PACKAGE_NAME: string = pkg.name || "@mariozechner/pi-mono";
-export const APP_NAME: string = pkg.piConfig?.name || "pi";
-export const APP_TITLE: string = pkg.piConfig?.name || "π";
-export const CONFIG_DIR_NAME: string = pkg.piConfig?.configDir || ".pi";
+export const PACKAGE_NAME: string = pkg.name || "ai-cli";
+export const APP_NAME: string = pkg.piConfig?.name || "ai";
+export const APP_TITLE: string = pkg.piConfig?.title || pkg.piConfig?.name || "AI";
+export const CONFIG_DIR_NAME: string = pkg.piConfig?.configDir || ".ai-cli";
 export const VERSION: string = pkg.version || "0.0.0";
 
 export const ENV_AGENT_DIR = `${APP_NAME.toUpperCase()}_AGENT_DIR`;
@@ -95,5 +95,5 @@ export function getDebugLogPath(): string {
 }
 
 export function getShareViewerUrl(): string {
-	return "https://share.pi.dev";
+	return "";
 }

@@ -1,4 +1,4 @@
-import { Editor, type EditorOptions, type EditorTheme, type TUI } from "@tui/index.js";
+import { Editor, type EditorOptions, type EditorTheme, type TUI } from "#tui/index.js";
 import type { AppKeybinding, KeybindingsManager } from "../../../session/keybindings.js";
 
 /**

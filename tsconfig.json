@@ -17,12 +17,12 @@
     "sourceMap": true,
     "baseUrl": ".",
     "paths": {
-      "@ai/*": ["./src/ai/*"],
-      "@agent/*": ["./src/agent/*"],
-      "@tui/*": ["./src/tui/*"],
-      "@session/*": ["src/session/*"],
-      "@extensions/*": ["src/extensions/*"],
-      "@cli/*": ["src/cli/*"]
+      "#ai/*": ["./src/ai/*"],
+      "#agent/*": ["./src/agent/*"],
+      "#tui/*": ["./src/tui/*"],
+      "#session/*": ["src/session/*"],
+      "#extensions/*": ["src/extensions/*"],
+      "#cli/*": ["src/cli/*"]
     }
   },
   "include": ["src/**/*"],

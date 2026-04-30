@@ -1,4 +1,4 @@
-import type { AgentTool } from "@agent/types.js";
+import type { AgentTool } from "#agent/types.js";
 import type { ExtensionContext, ToolDefinition } from "../extensions/types.js";
 
 /** Wrap a ToolDefinition into an AgentTool for the core runtime. */

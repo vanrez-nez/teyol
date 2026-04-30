@@ -1,4 +1,4 @@
-import { Box, Markdown, type MarkdownTheme, Text } from "@tui/index.js";
+import { Box, Markdown, type MarkdownTheme, Text } from "#tui/index.js";
 import type { ParsedSkillBlock } from "../../../session/agent-session.js";
 import { getMarkdownTheme, theme } from "../theme/theme.js";
 import { keyText } from "./keybinding-hints.js";

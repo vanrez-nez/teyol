@@ -1,5 +1,5 @@
-import type { AgentMessage } from "@agent/types.js";
-import type { ImageContent, Message, TextContent } from "@ai/index.js";
+import type { AgentMessage } from "#agent/types.js";
+import type { ImageContent, Message, TextContent } from "#ai/index.js";
 import { randomUUID } from "crypto";
 import {
 	appendFileSync,

@@ -12,8 +12,8 @@ import {
 	type OAuthCredentials,
 	type OAuthLoginCallbacks,
 	type OAuthProviderId,
-} from "@ai/index.js";
-import { getOAuthApiKey, getOAuthProvider, getOAuthProviders } from "@ai/oauth.js";
+} from "#ai/index.js";
+import { getOAuthApiKey, getOAuthProvider, getOAuthProviders } from "#ai/oauth.js";
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { dirname, join } from "path";
 import lockfile from "proper-lockfile";

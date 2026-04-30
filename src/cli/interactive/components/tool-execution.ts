@@ -1,4 +1,4 @@
-import { Box, type Component, Container, getCapabilities, Image, Spacer, Text, type TUI } from "@tui/index.js";
+import { Box, type Component, Container, getCapabilities, Image, Spacer, Text, type TUI } from "#tui/index.js";
 import type { ToolDefinition, ToolRenderContext } from "../../../extensions/types.js";
 // Built-in tools and renderers mocked/removed for generic CLI
 const createAllToolDefinitions = (cwd: string): any => ({});

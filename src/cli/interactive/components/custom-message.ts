@@ -1,6 +1,6 @@
-import type { TextContent } from "@ai/index.js";
-import type { Component } from "@tui/index.js";
-import { Box, Container, Markdown, type MarkdownTheme, Spacer, Text } from "@tui/index.js";
+import type { TextContent } from "#ai/index.js";
+import type { Component } from "#tui/index.js";
+import { Box, Container, Markdown, type MarkdownTheme, Spacer, Text } from "#tui/index.js";
 import type { MessageRenderer } from "../../../extensions/types.js";
 import type { CustomMessage } from "../../../session/messages.js";
 import { getMarkdownTheme, theme } from "../theme/theme.js";

@@ -1,4 +1,4 @@
-import { type Model, modelsAreEqual } from "@ai/index.js";
+import { type Model, modelsAreEqual } from "#ai/index.js";
 import {
 	Container,
 	type Focusable,
@@ -8,7 +8,7 @@ import {
 	Spacer,
 	Text,
 	type TUI,
-} from "@tui/index.js";
+} from "#tui/index.js";
 import type { ModelRegistry } from "../../../session/model-registry.js";
 import type { SettingsManager } from "../../../session/settings-manager.js";
 import { theme } from "../theme/theme.js";

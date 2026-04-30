@@ -2,9 +2,9 @@
  * Extension runner - executes extensions and manages their lifecycle.
  */
 
-import type { AgentMessage } from "@agent/types.js";
-import type { ImageContent, Model } from "@ai/types.js";
-import type { KeyId } from "@tui/index.js";
+import type { AgentMessage } from "#agent/types.js";
+import type { ImageContent, Model } from "#ai/types.js";
+import type { KeyId } from "#tui/index.js";
 import type { ResourceDiagnostic } from "../session/diagnostics.js";
 import type { KeybindingsConfig } from "../session/keybindings.js";
 import type { ModelRegistry } from "../session/model-registry.js";
@@ -462,7 +462,7 @@ export class ExtensionRunner {
 	}
 
 	invalidate(
-		message = "This extension ctx is stale after session replacement or reload. Do not use a captured pi or command ctx after ctx.newSession(), ctx.fork(), ctx.switchSession(), or ctx.reload(). For newSession, fork, and switchSession, move post-replacement work into withSession and use the ctx passed to withSession. For reload, do not use the old ctx after await ctx.reload().",
+		message = "This extension ctx is stale after session replacement or reload. Do not use a captured assistant or command ctx after ctx.newSession(), ctx.fork(), ctx.switchSession(), or ctx.reload(). For newSession, fork, and switchSession, move post-replacement work into withSession and use the ctx passed to withSession. For reload, do not use the old ctx after await ctx.reload().",
 	): void {
 		if (!this.staleMessage) {
 			this.staleMessage = message;

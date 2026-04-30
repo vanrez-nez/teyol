@@ -4,8 +4,8 @@
  * Provides a transformer to convert custom message types to LLM-compatible messages.
  */
 
-import type { AgentMessage } from "@agent/types.js";
-import type { ImageContent, Message, TextContent } from "@ai/types.js";
+import type { AgentMessage } from "#agent/types.js";
+import type { ImageContent, Message, TextContent } from "#ai/types.js";
 
 export const COMPACTION_SUMMARY_PREFIX = `The conversation history before this point was compacted into the following summary:
 
@@ -51,7 +51,7 @@ export interface CompactionSummaryMessage {
 }
 
 // Extend CustomAgentMessages via declaration merging
-declare module "@agent/types.js" {
+declare module "#agent/types.js" {
 	interface CustomAgentMessages {
 		custom: CustomMessage;
 		branchSummary: BranchSummaryMessage;

@@ -1,6 +1,6 @@
 import { join } from "node:path";
-import type { ThinkingLevel } from "@agent/index.js";
-import type { Model } from "@ai/index.js";
+import type { ThinkingLevel } from "#agent/index.js";
+import type { Model } from "#ai/index.js";
 import { getAgentDir } from "../config.js";
 import { AuthStorage } from "./auth-storage.js";
 import type { SessionStartEvent, ToolDefinition } from "../extensions/index.js";

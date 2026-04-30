@@ -1,6 +1,6 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
-import type { EditorTheme, MarkdownTheme, SelectListTheme } from "@tui/index.js";
+import type { EditorTheme, MarkdownTheme, SelectListTheme } from "#tui/index.js";
 import chalk from "chalk";
 import { highlight, supportsLanguage } from "cli-highlight";
 import { type Static, Type } from "@sinclair/typebox";
@@ -1131,7 +1131,7 @@ export function getEditorTheme(): EditorTheme {
 	};
 }
 
-export function getSettingsListTheme(): import("@tui/index.js").SettingsListTheme {
+export function getSettingsListTheme(): import("#tui/index.js").SettingsListTheme {
 	return {
 		label: (text: string, selected: boolean) => (selected ? theme.fg("accent", text) : text),
 		value: (text: string, selected: boolean) => (selected ? theme.fg("accent", text) : theme.fg("muted", text)),

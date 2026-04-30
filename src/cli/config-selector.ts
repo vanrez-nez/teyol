@@ -2,7 +2,7 @@
  * TUI config selector for `pi config` command
  */
 
-import { ProcessTerminal, TUI } from "@tui/index.js";
+import { ProcessTerminal, TUI } from "#tui/index.js";
 import type { ResolvedPaths } from "../session/package-manager.js";
 import type { SettingsManager } from "../session/settings-manager.js";
 import { ConfigSelectorComponent } from "./interactive/components/config-selector.js";

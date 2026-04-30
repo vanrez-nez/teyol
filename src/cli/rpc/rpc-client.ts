@@ -1,12 +1,12 @@
 /**
- * RPC Client for programmatic access to the coding agent.
+ * RPC client for programmatic access to the AI CLI.
  *
  * Spawns the agent in RPC mode and provides a typed API for all operations.
  */
 
 import { type ChildProcess, spawn } from "node:child_process";
-import type { AgentEvent, AgentMessage, ThinkingLevel } from "@agent/index.js";
-import type { ImageContent } from "@ai/index.js";
+import type { AgentEvent, AgentMessage, ThinkingLevel } from "#agent/index.js";
+import type { ImageContent } from "#ai/index.js";
 import type { SessionStats } from "../../session/agent-session.js";
 import type { CompactionResult } from "../../session/compaction/index.js";
 import { attachJsonlLineReader, serializeJsonLine } from "./jsonl.js";

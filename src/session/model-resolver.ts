@@ -2,8 +2,8 @@
  * Model resolution, scoping, and initial selection
  */
 
-import type { ThinkingLevel } from "@agent/types.js";
-import { type Api, type KnownProvider, type Model, modelsAreEqual } from "@ai/index.js";
+import type { ThinkingLevel } from "#agent/types.js";
+import { type Api, type KnownProvider, type Model, modelsAreEqual } from "#ai/index.js";
 import chalk from "chalk";
 import { minimatch } from "minimatch";
 import { isValidThinkingLevel } from "../cli/args.js";

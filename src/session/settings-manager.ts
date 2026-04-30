@@ -1,4 +1,4 @@
-import type { Transport } from "@ai/index.js";
+import type { Transport } from "#ai/index.js";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
 import { homedir } from "os";
 import { dirname, join } from "path";
