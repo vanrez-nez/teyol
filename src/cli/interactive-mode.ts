@@ -100,9 +100,11 @@ import { FooterComponent } from "./interactive/components/footer.js";
 import { keyHint, keyText, rawKeyHint } from "./interactive/components/keybinding-hints.js";
 import { loadAsciiLogo, LogoComponent } from "./interactive/logo.js";
 import { LoginDialogComponent } from "./interactive/components/login-dialog.js";
+import { type ModelAction, ModelActionsSelectorComponent } from "./interactive/components/model-actions-selector.js";
 import { ModelSelectorComponent } from "./interactive/components/model-selector.js";
 import { type AuthSelectorProvider, OAuthSelectorComponent } from "./interactive/components/oauth-selector.js";
 import { ScopedModelsSelectorComponent } from "./interactive/components/scoped-models-selector.js";
+import { type SessionAction, SessionActionsSelectorComponent } from "./interactive/components/session-actions-selector.js";
 import { SessionSelectorComponent } from "./interactive/components/session-selector.js";
 import { SettingsSelectorComponent } from "./interactive/components/settings-selector.js";
 import { SkillInvocationMessageComponent } from "./interactive/components/skill-invocation-message.js";
@@ -295,7 +297,7 @@ export class InteractiveMode {
   // Header container that holds the built-in or custom header
   private headerContainer: Container;
 
-  // Built-in header (logo + keybinding hints + changelog)
+  // Built-in header (logo + keybinding hints)
   private builtInHeader: Component | undefined = undefined;
 
   // Custom header from extension (undefined = use built-in header)
@@ -410,30 +412,49 @@ export class InteractiveMode {
     const modelCommand = slashCommands.find((command) => command.name === "model");
     if (modelCommand) {
       modelCommand.getArgumentCompletions = (prefix: string): AutocompleteItem[] | null => {
-        // Get available models (scoped or from registry)
-        const models =
-          this.session.scopedModels.length > 0
-            ? this.session.scopedModels.map((s) => s.model)
-            : this.session.modelRegistry.getAvailable();
+        const normalizedPrefix = prefix.trimStart();
+        const lowerPrefix = normalizedPrefix.toLowerCase();
+        const modelActions: Array<{ value: ModelAction; description: string }> = [
+          { value: "select", description: "Choose the active model" },
+          { value: "fast-cycle", description: "Configure models for Ctrl+P cycling" },
+        ];
 
-        if (models.length === 0) return null;
+        if (lowerPrefix.startsWith("select ")) {
+          return this.getModelArgumentCompletions(normalizedPrefix.slice("select ".length), "select ");
+        }
 
-        // Create items with provider/id format
-        const items = models.map((m) => ({
-          id: m.id,
-          provider: m.provider,
-          label: `${m.provider}/${m.id}`,
-        }));
+        const actionCompletions = modelActions
+          .filter((action) => action.value.startsWith(lowerPrefix))
+          .map((action) => ({
+            value: action.value,
+            label: action.value,
+            description: action.description,
+          }));
+        const modelCompletions = this.getModelArgumentCompletions(normalizedPrefix) ?? [];
+        const completions = [...actionCompletions, ...modelCompletions];
+        return completions.length > 0 ? completions : null;
+      };
+    }
 
-        // Fuzzy filter by model ID + provider (allows "opus anthropic" to match)
-        const filtered = fuzzyFilter(items, prefix, (item) => `${item.id} ${item.provider}`);
-
+    const sessionCommand = slashCommands.find((command) => command.name === "session");
+    if (sessionCommand) {
+      const sessionActions: Array<{ value: SessionAction; description: string }> = [
+        { value: "info", description: "Show current session info and stats" },
+        { value: "new", description: "Start a new session" },
+        { value: "resume", description: "Resume a different session" },
+        { value: "compact", description: "Manually compact session context" },
+        { value: "tree", description: "Navigate session tree" },
+        { value: "clone", description: "Duplicate current session position" },
+        { value: "fork", description: "Fork from a previous user message" },
+      ];
+      sessionCommand.getArgumentCompletions = (prefix: string): AutocompleteItem[] | null => {
+        const normalizedPrefix = prefix.trimStart().toLowerCase();
+        const filtered = sessionActions.filter((action) => action.value.startsWith(normalizedPrefix));
         if (filtered.length === 0) return null;
-
-        return filtered.map((item) => ({
-          value: item.label,
-          label: item.id,
-          description: item.provider,
+        return filtered.map((action) => ({
+          value: action.value,
+          label: action.value,
+          description: action.description,
         }));
       };
     }
@@ -507,7 +528,7 @@ export class InteractiveMode {
     if (this.settingsManager.getCollapseChangelog()) {
       const versionMatch = this.changelogMarkdown.match(/##\s+\[?(\d+\.\d+\.\d+)\]?/);
       const latestVersion = versionMatch ? versionMatch[1] : this.version;
-      const condensedText = `Updated to v${latestVersion}. Use ${theme.bold("/changelog")} to view full changelog.`;
+      const condensedText = `Updated to v${latestVersion}.`;
       this.chatContainer.addChild(new Text(condensedText, 1, 0));
     } else {
       this.chatContainer.addChild(new Text(theme.bold(theme.fg("accent", "What's New")), 1, 0));
@@ -2317,19 +2338,8 @@ export class InteractiveMode {
         return;
       }
       if (text === "/model" || text.startsWith("/model ")) {
-        const searchTerm = text.startsWith("/model ") ? text.slice(7).trim() : undefined;
         this.editor.setText("");
-        await this.handleModelCommand(searchTerm);
-        return;
-      }
-      if (text === "/export" || text.startsWith("/export ")) {
-        await this.handleExportCommand(text);
-        this.editor.setText("");
-        return;
-      }
-      if (text === "/import" || text.startsWith("/import ")) {
-        await this.handleImportCommand(text);
-        this.editor.setText("");
+        await this.handleModelCommand(text);
         return;
       }
       if (text === "/name" || text.startsWith("/name ")) {
@@ -2337,28 +2347,13 @@ export class InteractiveMode {
         this.editor.setText("");
         return;
       }
-      if (text === "/session") {
-        this.handleSessionCommand();
+      if (text === "/session" || text.startsWith("/session ")) {
+        await this.handleSessionCommand(text);
         this.editor.setText("");
         return;
       }
       if (text === "/hotkeys") {
         this.handleHotkeysCommand();
-        this.editor.setText("");
-        return;
-      }
-      if (text === "/fork") {
-        this.showUserMessageSelector();
-        this.editor.setText("");
-        return;
-      }
-      if (text === "/clone") {
-        this.editor.setText("");
-        await this.handleCloneCommand();
-        return;
-      }
-      if (text === "/tree") {
-        this.showTreeSelector();
         this.editor.setText("");
         return;
       }
@@ -2372,17 +2367,6 @@ export class InteractiveMode {
         this.editor.setText("");
         return;
       }
-      if (text === "/new") {
-        this.editor.setText("");
-        await this.handleClearCommand();
-        return;
-      }
-      if (text === "/compact" || text.startsWith("/compact ")) {
-        const customInstructions = text.startsWith("/compact ") ? text.slice(9).trim() : undefined;
-        this.editor.setText("");
-        await this.handleCompactCommand(customInstructions);
-        return;
-      }
       if (text === "/reload") {
         this.editor.setText("");
         await this.handleReloadCommand();
@@ -2393,12 +2377,7 @@ export class InteractiveMode {
         this.editor.setText("");
         return;
       }
-      if (text === "/resume") {
-        this.showSessionSelector();
-        this.editor.setText("");
-        return;
-      }
-      if (text === "/quit") {
+      if (text === "/exit" || text === "/quit") {
         this.editor.setText("");
         await this.shutdown();
         return;
@@ -3651,7 +3630,82 @@ export class InteractiveMode {
     });
   }
 
-  private async handleModelCommand(searchTerm?: string): Promise<void> {
+  private getModelArgumentCompletions(prefix: string, valuePrefix = ""): AutocompleteItem[] | null {
+    const models =
+      this.session.scopedModels.length > 0
+        ? this.session.scopedModels.map((s) => s.model)
+        : this.session.modelRegistry.getAvailable();
+
+    if (models.length === 0) return null;
+
+    const items = models.map((m) => ({
+      id: m.id,
+      provider: m.provider,
+      label: `${m.provider}/${m.id}`,
+    }));
+    const filtered = fuzzyFilter(items, prefix, (item) => `${item.id} ${item.provider}`);
+
+    if (filtered.length === 0) return null;
+
+    return filtered.map((item) => ({
+      value: `${valuePrefix}${item.label}`,
+      label: item.id,
+      description: item.provider,
+    }));
+  }
+
+  private async handleModelCommand(text: string): Promise<void> {
+    const argumentText = text === "/model" ? undefined : text.slice("/model".length).trim();
+
+    if (!argumentText) {
+      this.showModelActionsSelector();
+      return;
+    }
+
+    const [action, ...rest] = argumentText.split(/\s+/);
+    const actionArgument = rest.join(" ").trim();
+
+    if (action === "select") {
+      await this.handleModelSelectCommand(actionArgument || undefined);
+      return;
+    }
+
+    if (action === "fast-cycle") {
+      await this.showModelsSelector();
+      return;
+    }
+
+    await this.handleModelSelectCommand(argumentText);
+  }
+
+  private showModelActionsSelector(): void {
+    this.showSelector((done) => {
+      const selector = new ModelActionsSelectorComponent(
+        (action) => {
+          done();
+          void this.handleModelAction(action);
+        },
+        () => {
+          done();
+          this.ui.requestRender();
+        },
+      );
+      return { component: selector, focus: selector.getSelectList() };
+    });
+  }
+
+  private async handleModelAction(action: ModelAction): Promise<void> {
+    switch (action) {
+      case "select":
+        this.showModelSelector();
+        return;
+      case "fast-cycle":
+        await this.showModelsSelector();
+        return;
+    }
+  }
+
+  private async handleModelSelectCommand(searchTerm?: string): Promise<void> {
     if (!searchTerm) {
       this.showModelSelector();
       return;
@@ -4583,101 +4637,6 @@ export class InteractiveMode {
     }
   }
 
-  private async handleExportCommand(text: string): Promise<void> {
-    const outputPath = this.getPathCommandArgument(text, "/export");
-
-    try {
-      if (outputPath?.endsWith(".jsonl")) {
-        const filePath = this.session.exportToJsonl(outputPath);
-        this.showStatus(`Session exported to: ${filePath}`);
-      } else {
-        const filePath = await this.session.exportToHtml(outputPath);
-        this.showStatus(`Session exported to: ${filePath}`);
-      }
-    } catch (error: unknown) {
-      this.showError(`Failed to export session: ${error instanceof Error ? error.message : "Unknown error"}`);
-    }
-  }
-
-  private getPathCommandArgument(text: string, command: "/export" | "/import"): string | undefined {
-    if (text === command) {
-      return undefined;
-    }
-    if (!text.startsWith(`${command} `)) {
-      return undefined;
-    }
-
-    const argsString = text.slice(command.length + 1).trimStart();
-    if (!argsString) {
-      return undefined;
-    }
-
-    const firstChar = argsString[0];
-    if (firstChar === '"' || firstChar === "'") {
-      const closingQuoteIndex = argsString.indexOf(firstChar, 1);
-      if (closingQuoteIndex < 0) {
-        return undefined;
-      }
-      return argsString.slice(1, closingQuoteIndex);
-    }
-
-    const firstWhitespaceIndex = argsString.search(/\s/);
-    if (firstWhitespaceIndex < 0) {
-      return argsString;
-    }
-    return argsString.slice(0, firstWhitespaceIndex);
-  }
-
-  private async handleImportCommand(text: string): Promise<void> {
-    const inputPath = this.getPathCommandArgument(text, "/import");
-    if (!inputPath) {
-      this.showError("Usage: /import <path.jsonl>");
-      return;
-    }
-
-    const confirmed = await this.showExtensionConfirm("Import session", `Replace current session with ${inputPath}?`);
-    if (!confirmed) {
-      this.showStatus("Import cancelled");
-      return;
-    }
-
-    try {
-      if (this.loadingAnimation) {
-        this.loadingAnimation.stop();
-        this.loadingAnimation = undefined;
-      }
-      this.statusContainer.clear();
-      const result = await this.runtimeHost.importFromJsonl(inputPath);
-      if (result.cancelled) {
-        this.showStatus("Import cancelled");
-        return;
-      }
-      this.renderCurrentSessionState();
-      this.showStatus(`Session imported from: ${inputPath}`);
-    } catch (error: unknown) {
-      if (error instanceof MissingSessionCwdError) {
-        const selectedCwd = await this.promptForMissingSessionCwd(error);
-        if (!selectedCwd) {
-          this.showStatus("Import cancelled");
-          return;
-        }
-        const result = await this.runtimeHost.importFromJsonl(inputPath, selectedCwd);
-        if (result.cancelled) {
-          this.showStatus("Import cancelled");
-          return;
-        }
-        this.renderCurrentSessionState();
-        this.showStatus(`Session imported from: ${inputPath}`);
-        return;
-      }
-      if (error instanceof SessionImportFileNotFoundError) {
-        this.showError(`Failed to import session: ${error.message}`);
-        return;
-      }
-      await this.handleFatalRuntimeError("Failed to import session", error);
-    }
-  }
-
   private async handleShareCommand(): Promise<void> {
     // Check if gh is available and logged in
     try {
@@ -4784,7 +4743,77 @@ export class InteractiveMode {
     this.ui.requestRender();
   }
 
-  private handleSessionCommand(): void {
+  private async handleSessionCommand(text: string): Promise<void> {
+    const actionText = text === "/session" ? undefined : text.slice("/session".length).trim();
+    if (!actionText) {
+      this.showSessionActionsSelector();
+      return;
+    }
+
+    const [action] = actionText.split(/\s+/, 1);
+    if (this.isSessionAction(action)) {
+      await this.handleSessionAction(action);
+      return;
+    }
+
+    this.showError("Unknown session action. Use: info, new, resume, compact, tree, clone, fork");
+  }
+
+  private isSessionAction(action: string | undefined): action is SessionAction {
+    return (
+      action === "info" ||
+      action === "new" ||
+      action === "resume" ||
+      action === "compact" ||
+      action === "tree" ||
+      action === "clone" ||
+      action === "fork"
+    );
+  }
+
+  private showSessionActionsSelector(): void {
+    this.showSelector((done) => {
+      const selector = new SessionActionsSelectorComponent(
+        (action) => {
+          done();
+          void this.handleSessionAction(action);
+        },
+        () => {
+          done();
+          this.ui.requestRender();
+        },
+      );
+      return { component: selector, focus: selector.getSelectList() };
+    });
+  }
+
+  private async handleSessionAction(action: SessionAction): Promise<void> {
+    switch (action) {
+      case "info":
+        this.showSessionInfo();
+        return;
+      case "new":
+        await this.handleClearCommand();
+        return;
+      case "resume":
+        this.showSessionSelector();
+        return;
+      case "compact":
+        await this.handleCompactCommand();
+        return;
+      case "tree":
+        this.showTreeSelector();
+        return;
+      case "clone":
+        await this.handleCloneCommand();
+        return;
+      case "fork":
+        this.showUserMessageSelector();
+        return;
+    }
+  }
+
+  private showSessionInfo(): void {
     const stats = this.session.getSessionStats();
     const sessionName = this.sessionManager.getSessionName();
 
