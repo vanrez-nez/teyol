@@ -11,6 +11,7 @@ import { DefaultResourceLoader } from "../dist/session/resource-loader.js";
 import { SessionManager } from "../dist/session/session-manager.js";
 import { SettingsManager } from "../dist/session/settings-manager.js";
 import { buildSystemPrompt } from "../dist/session/system-prompt.js";
+import { validateUiDescriptorFixtures } from "../dist/session/ui-descriptors.fixtures.js";
 
 const repoRoot = process.cwd();
 const cliRoot = mkdtempSync(join(tmpdir(), "teyol-cli-"));
@@ -159,6 +160,13 @@ function testUnknownFlagDiagnostics() {
 	}, /Unknown option: --fake-extension-flag/);
 }
 
+function testUiDescriptorContracts() {
+	const results = validateUiDescriptorFixtures();
+	for (const result of results) {
+		assert.equal(result.actual, result.expected, result.name);
+	}
+}
+
 await testNoToolsByDefault();
 await testExtensionToolsActiveByDefault();
 await testNoToolsDisablesExtensionTools();
@@ -166,5 +174,6 @@ await testToolAllowlist();
 testSystemPrompt();
 testCliHelp();
 testUnknownFlagDiagnostics();
+testUiDescriptorContracts();
 
 console.log("smoke ok");
