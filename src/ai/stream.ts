@@ -1,6 +1,7 @@
 import "./providers/register-builtins.js";
 
 import { getApiProvider } from "./api-registry.js";
+import { getLogger } from "../session/logger.js";
 import type {
 	Api,
 	AssistantMessage,
@@ -13,6 +14,47 @@ import type {
 } from "./types.js";
 
 export { getEnvApiKey } from "./env-api-keys.js";
+
+function logRequest(model: Model<Api>, context: Context, options?: StreamOptions): void {
+	getLogger().debug("llm.request.context", {
+		api: model.api,
+		provider: model.provider,
+		model: model.id,
+		context,
+		options: {
+			temperature: options?.temperature,
+			maxTokens: options?.maxTokens,
+			transport: options?.transport,
+			cacheRetention: options?.cacheRetention,
+			sessionId: options?.sessionId,
+			timeoutMs: options?.timeoutMs,
+			maxRetries: options?.maxRetries,
+			maxRetryDelayMs: options?.maxRetryDelayMs,
+			metadata: options?.metadata,
+		},
+	});
+}
+
+function logFinalResponse(model: Model<Api>, stream: AssistantMessageEventStream): void {
+	stream
+		.result()
+		.then((message) => {
+			getLogger().debug("llm.response.full", {
+				api: model.api,
+				provider: model.provider,
+				model: model.id,
+				message,
+			});
+		})
+		.catch((error) => {
+			getLogger().error("llm.response.log_error", {
+				api: model.api,
+				provider: model.provider,
+				model: model.id,
+				error,
+			});
+		});
+}
 
 function resolveApiProvider(api: Api) {
 	const provider = getApiProvider(api);
@@ -28,7 +70,10 @@ export function stream<TApi extends Api>(
 	options?: ProviderStreamOptions,
 ): AssistantMessageEventStream {
 	const provider = resolveApiProvider(model.api);
-	return provider.stream(model, context, options as StreamOptions);
+	logRequest(model, context, options as StreamOptions | undefined);
+	const s = provider.stream(model, context, options as StreamOptions);
+	logFinalResponse(model, s);
+	return s;
 }
 
 export async function complete<TApi extends Api>(
@@ -46,7 +91,10 @@ export function streamSimple<TApi extends Api>(
 	options?: SimpleStreamOptions,
 ): AssistantMessageEventStream {
 	const provider = resolveApiProvider(model.api);
-	return provider.streamSimple(model, context, options);
+	logRequest(model, context, options);
+	const s = provider.streamSimple(model, context, options);
+	logFinalResponse(model, s);
+	return s;
 }
 
 export async function completeSimple<TApi extends Api>(
