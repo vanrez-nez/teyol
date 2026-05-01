@@ -2,8 +2,8 @@
  * Print mode (single-shot): Send prompts, output result, exit.
  *
  * Used for:
- * - `akah -p "prompt"` - text output
- * - `akah --mode json "prompt"` - JSON event stream
+ * - `teyol -p "prompt"` - text output
+ * - `teyol --mode json "prompt"` - JSON event stream
  */
 
 import type { AssistantMessage, ImageContent } from "#ai/index.js";

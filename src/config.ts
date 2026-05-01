@@ -28,10 +28,10 @@ export function getPackageJsonPath(): string {
 
 const pkg = JSON.parse(readFileSync(getPackageJsonPath(), "utf-8"));
 
-export const PACKAGE_NAME: string = pkg.name || "akah";
-export const APP_NAME: string = pkg.akahConfig?.name || "akah";
-export const APP_TITLE: string = pkg.akahConfig?.title || pkg.akahConfig?.name || "Akah";
-export const CONFIG_DIR_NAME: string = pkg.akahConfig?.configDir || ".akah";
+export const PACKAGE_NAME: string = pkg.name || "teyol";
+export const APP_NAME: string = pkg.teyolConfig?.name || "teyol";
+export const APP_TITLE: string = pkg.teyolConfig?.title || pkg.teyolConfig?.name || "Teyol";
+export const CONFIG_DIR_NAME: string = pkg.teyolConfig?.configDir || ".teyol";
 export const VERSION: string = pkg.version || "0.0.0";
 
 export const ENV_AGENT_DIR = `${APP_NAME.toUpperCase()}_AGENT_DIR`;
@@ -91,7 +91,7 @@ export function getExamplesPath(): string {
 }
 
 export function getLogPath(): string {
-	return join(getAgentDir(), "akah.log");
+	return join(getAgentDir(), "teyol.log");
 }
 
 export function isDevMode(): boolean {

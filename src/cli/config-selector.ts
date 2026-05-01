@@ -1,5 +1,5 @@
 /**
- * TUI config selector for `akah config` command
+ * TUI config selector for `teyol config` command
  */
 
 import { ProcessTerminal, TUI } from "#tui/index.js";

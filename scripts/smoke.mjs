@@ -13,14 +13,14 @@ import { SettingsManager } from "../dist/session/settings-manager.js";
 import { buildSystemPrompt } from "../dist/session/system-prompt.js";
 
 const repoRoot = process.cwd();
-const cliRoot = mkdtempSync(join(tmpdir(), "akah-cli-"));
-const cliEnv = { ...process.env, AKAH_AGENT_DIR: join(cliRoot, "agent") };
+const cliRoot = mkdtempSync(join(tmpdir(), "teyol-cli-"));
+const cliEnv = { ...process.env, TEYOL_AGENT_DIR: join(cliRoot, "agent") };
 
 function makeServices(name) {
-	const root = mkdtempSync(join(tmpdir(), `akah-${name}-`));
+	const root = mkdtempSync(join(tmpdir(), `teyol-${name}-`));
 	const agentDir = join(root, "agent");
 	const authStorage = AuthStorage.create(join(root, "auth.json"));
-	const settingsManager = SettingsManager.create(repoRoot, agentDir);
+	const settingsManager = SettingsManager.create(root, agentDir);
 	const modelRegistry = ModelRegistry.create(authStorage, join(root, "models.json"));
 	return { root, agentDir, authStorage, settingsManager, modelRegistry };
 }
@@ -45,7 +45,7 @@ function createEchoTool(name) {
 async function createSessionWithTools(toolNames, options = {}) {
 	const services = makeServices("tools");
 	const resourceLoader = new DefaultResourceLoader({
-		cwd: repoRoot,
+		cwd: services.root,
 		agentDir: services.agentDir,
 		settingsManager: services.settingsManager,
 		extensionFactories: [
@@ -58,7 +58,7 @@ async function createSessionWithTools(toolNames, options = {}) {
 	});
 	await resourceLoader.reload();
 	const result = await createAgentSession({
-		cwd: repoRoot,
+		cwd: services.root,
 		agentDir: services.agentDir,
 		authStorage: services.authStorage,
 		settingsManager: services.settingsManager,
@@ -73,7 +73,7 @@ async function createSessionWithTools(toolNames, options = {}) {
 async function testNoToolsByDefault() {
 	const services = makeServices("no-tools");
 	const { session } = await createAgentSession({
-		cwd: repoRoot,
+		cwd: services.root,
 		agentDir: services.agentDir,
 		authStorage: services.authStorage,
 		settingsManager: services.settingsManager,
@@ -135,7 +135,7 @@ function testCliHelp() {
 		env: cliEnv,
 		encoding: "utf-8",
 	});
-	assert.match(help, /^akah - Generic AI assistant/m);
+	assert.match(help, /^teyol - Generic AI assistant/m);
 	assert.doesNotMatch(help, /Built-in Tool|update \[source|Run bash|coding agent/i);
 }
 

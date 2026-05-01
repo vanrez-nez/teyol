@@ -1,9 +1,9 @@
 /**
  * Central timing instrumentation for startup profiling.
- * Enable with AKAH_TIMING=1 environment variable.
+ * Enable with TEYOL_TIMING=1 environment variable.
  */
 
-const ENABLED = process.env.AKAH_TIMING === "1";
+const ENABLED = process.env.TEYOL_TIMING === "1";
 const timings: Array<{ label: string; ms: number }> = [];
 let lastTime = Date.now();
 

@@ -1,13 +1,13 @@
-# Akah Extract Review
+# Teyol Extract Review
 
 ## Current State
 
-Akah is a generic, non-coding LLM CLI. The active product identity is:
+Teyol is a generic, non-coding LLM CLI. The active product identity is:
 
-- Package: `akah`
-- Binary: `akah`
-- Config directory: `.akah`
-- User agent/config environment prefix: `AKAH_`
+- Package: `teyol`
+- Binary: `teyol`
+- Config directory: `.teyol`
+- User agent/config environment prefix: `TEYOL_`
 - Built-in model providers: `ollama` and `openrouter`
 
 The CLI keeps the shared session/runtime, model registry, prompt templates, themes, skills, extensions, compaction, and interactive terminal UI. Coding-agent-specific defaults, provider adapters, compatibility aliases, and old package names have been removed from the built-in runtime.
@@ -41,20 +41,20 @@ Custom providers remain possible through the generic model/provider registration
 
 Canonical paths and environment variables:
 
-- `~/.akah/agent`
-- project `.akah`
-- `AKAH_AGENT_DIR`
-- `AKAH_OFFLINE`
-- `AKAH_CACHE_RETENTION`
-- `AKAH_CLEAR_ON_SHRINK`
-- `AKAH_HARDWARE_CURSOR`
-- `AKAH_TIMING`
-- `AKAH_TELEMETRY`
-- `AKAH_TUI_WRITE_LOG`
-- `AKAH_DEBUG_REDRAW`
-- `AKAH_TUI_DEBUG`
+- `~/.teyol/agent`
+- project `.teyol`
+- `TEYOL_AGENT_DIR`
+- `TEYOL_OFFLINE`
+- `TEYOL_CACHE_RETENTION`
+- `TEYOL_CLEAR_ON_SHRINK`
+- `TEYOL_HARDWARE_CURSOR`
+- `TEYOL_TIMING`
+- `TEYOL_TELEMETRY`
+- `TEYOL_TUI_WRITE_LOG`
+- `TEYOL_DEBUG_REDRAW`
+- `TEYOL_TUI_DEBUG`
 
-Extension package manifests now use the `akah` package field. Extension virtual imports expose `@akah`.
+Extension package manifests now use the `teyol` package field. Extension virtual imports expose `@teyol`.
 
 ## Verification Checklist
 

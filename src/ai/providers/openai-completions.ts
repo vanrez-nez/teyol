@@ -101,7 +101,7 @@ function resolveCacheRetention(cacheRetention?: CacheRetention): CacheRetention 
   if (cacheRetention) {
     return cacheRetention;
   }
-  if (typeof process !== "undefined" && process.env.AKAH_CACHE_RETENTION === "long") {
+  if (typeof process !== "undefined" && process.env.TEYOL_CACHE_RETENTION === "long") {
     return "long";
   }
   return "short";
@@ -952,7 +952,7 @@ function parseChunkUsage(
   const reportedCachedTokens = rawUsage.prompt_tokens_details?.cached_tokens ?? rawUsage.prompt_cache_hit_tokens ?? 0;
   const cacheWriteTokens = rawUsage.prompt_tokens_details?.cache_write_tokens || 0;
 
-  // Normalize to Akah semantics:
+  // Normalize to Teyol semantics:
   // - cacheRead: hits from cache created by previous requests only
   // - cacheWrite: tokens written to cache in this request
   // Some OpenAI-compatible providers (observed on OpenRouter) report cached_tokens

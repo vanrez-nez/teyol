@@ -1,15 +1,15 @@
 {
-  "name": "akah",
+  "name": "teyol",
   "version": "0.1.0",
   "description": "A generic, extendable AI assistant CLI.",
   "type": "module",
   "main": "dist/cli/main.js",
   "bin": {
-    "akah": "dist/cli/main.js"
+    "teyol": "dist/cli/main.js"
   },
-  "akahConfig": {
-    "name": "akah",
-    "configDir": ".akah"
+  "teyolConfig": {
+    "name": "teyol",
+    "configDir": ".teyol"
   },
   "imports": {
     "#ai/*": "./dist/ai/*",

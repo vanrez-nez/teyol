@@ -636,7 +636,7 @@ export class InteractiveMode {
       );
       const onboarding = theme.fg(
         "dim",
-        `Akah can explain its own features and look up its docs. Ask it how to use or extend Akah.`,
+        `Teyol can explain its own features and look up its docs. Ask it how to use or extend Teyol.`,
       );
       this.builtInHeader = new ExpandableText(
         () => `${compactInstructions}\n${compactOnboarding}\n\n${onboarding}`,
@@ -783,7 +783,7 @@ export class InteractiveMode {
   }
 
   private async checkForPackageUpdates(): Promise<string[]> {
-    if (process.env.AKAH_OFFLINE) {
+    if (process.env.TEYOL_OFFLINE) {
       return [];
     }
 
@@ -841,7 +841,7 @@ export class InteractiveMode {
     }
 
     if (extendedKeysFormat === "xterm") {
-      return "tmux extended-keys-format is xterm. Akah works best with csi-u. Add `set -g extended-keys-format csi-u` to ~/.tmux.conf and restart tmux.";
+      return "tmux extended-keys-format is xterm. Teyol works best with csi-u. Add `set -g extended-keys-format csi-u` to ~/.tmux.conf and restart tmux.";
     }
 
     return undefined;

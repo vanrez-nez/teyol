@@ -1,4 +1,4 @@
-import { Type, type ExtensionAPI } from "@akah";
+import { Type, type ExtensionAPI } from "@teyol";
 
 interface HelpSection {
 	document: string;
@@ -17,15 +17,15 @@ const MAX_RESULTS = 5;
 
 const SECTIONS: HelpSection[] = [
 	{
-		document: "Akah Basics",
-		title: "Using Akah",
-		keywords: ["akah", "cli", "usage", "prompt", "assistant"],
-		description: "Akah is an interactive command-line assistant that can answer prompts and use configured tools.",
+		document: "Teyol Basics",
+		title: "Using Teyol",
+		keywords: ["teyol", "cli", "usage", "prompt", "assistant"],
+		description: "Teyol is an interactive command-line assistant that can answer prompts and use configured tools.",
 		content:
-			"Start Akah in a project directory, type a prompt, and submit it. Slash commands manage local behavior such as settings, model selection, sessions, hotkeys, reload, and exit.",
+			"Start Teyol in a project directory, type a prompt, and submit it. Slash commands manage local behavior such as settings, model selection, sessions, hotkeys, reload, and exit.",
 	},
 	{
-		document: "Akah Basics",
+		document: "Teyol Basics",
 		title: "Slash Commands",
 		keywords: ["slash", "commands", "model", "session", "settings", "hotkeys"],
 		description: "Slash commands are user-facing interactive commands.",
@@ -33,28 +33,28 @@ const SECTIONS: HelpSection[] = [
 			"Use /model to manage model selection and fast-cycle models. Use /session to manage session actions. Use /settings for runtime toggles, /hotkeys for shortcuts, /reload to reload resources, and /exit to quit.",
 	},
 	{
-		document: "Akah Extensions",
+		document: "Teyol Extensions",
 		title: "Extensions",
 		keywords: ["extensions", "project", "global", "autoload", "register"],
-		description: "Extensions are TypeScript or JavaScript modules loaded from Akah extension directories.",
+		description: "Extensions are TypeScript or JavaScript modules loaded from Teyol extension directories.",
 		content:
-			"Project-local extensions live under .akah/extensions. An extension exports a default factory function that receives the Akah extension API and can register tools, commands, shortcuts, flags, event handlers, message renderers, providers, and UI behavior.",
+			"Project-local extensions live under .teyol/extensions. An extension exports a default factory function that receives the Teyol extension API and can register tools, commands, shortcuts, flags, event handlers, message renderers, providers, and UI behavior.",
 	},
 	{
-		document: "Akah Extensions",
+		document: "Teyol Extensions",
 		title: "LLM Tools",
 		keywords: ["tools", "function", "call", "registerTool", "schema", "promptSnippet"],
 		description: "Extensions can register LLM-callable tools with schemas and execution handlers.",
 		content:
-			"Use akah.registerTool with a name, label, description, TypeBox parameters, and execute handler. Tools with a promptSnippet appear in the available tools section of the system prompt. Extension tools are active by default unless a tool allowlist is configured.",
+			"Use teyol.registerTool with a name, label, description, TypeBox parameters, and execute handler. Tools with a promptSnippet appear in the available tools section of the system prompt. Extension tools are active by default unless a tool allowlist is configured.",
 	},
 	{
-		document: "Akah Extensions",
+		document: "Teyol Extensions",
 		title: "Help Search",
 		keywords: ["help", "docs", "documentation", "search", "keyword"],
-		description: "The akah_help tool searches small documentation sections by keyword.",
+		description: "The teyol_help tool searches small documentation sections by keyword.",
 		content:
-			"Call akah_help with a keyword or short phrase when a user asks how Akah works. The tool ranks section title matches first, keyword matches second, then description and content matches.",
+			"Call teyol_help with a keyword or short phrase when a user asks how Teyol works. The tool ranks section title matches first, keyword matches second, then description and content matches.",
 	},
 ];
 
@@ -109,10 +109,10 @@ function searchSections(keyword: string): ScoredSection[] {
 
 function formatResults(keyword: string, results: ScoredSection[]): string {
 	if (results.length === 0) {
-		return `No matching Akah help found for "${keyword}". Try broader keywords such as "extensions", "tools", "model", "session", or "commands".`;
+		return `No matching Teyol help found for "${keyword}". Try broader keywords such as "extensions", "tools", "model", "session", or "commands".`;
 	}
 
-	const lines = [`Akah help results for "${keyword}":`];
+	const lines = [`Teyol help results for "${keyword}":`];
 	for (const { section } of results) {
 		lines.push("");
 		lines.push(`## ${section.title}`);
@@ -124,15 +124,15 @@ function formatResults(keyword: string, results: ScoredSection[]): string {
 	return lines.join("\n");
 }
 
-export default function akahHelpExtension(akah: ExtensionAPI): void {
-	akah.registerTool({
-		name: "akah_help",
-		label: "Akah Help",
-		description: "Search Akah usage, command, extension, and tool documentation by keyword.",
-		promptSnippet: "Search concise Akah usage and extension documentation by keyword.",
+export default function teyolHelpExtension(teyol: ExtensionAPI): void {
+	teyol.registerTool({
+		name: "teyol_help",
+		label: "Teyol Help",
+		description: "Search Teyol usage, command, extension, and tool documentation by keyword.",
+		promptSnippet: "Search concise Teyol usage and extension documentation by keyword.",
 		parameters: Type.Object({
 			keyword: Type.String({
-				description: "Keyword or short phrase to search for in Akah help documentation.",
+				description: "Keyword or short phrase to search for in Teyol help documentation.",
 			}),
 		}),
 		async execute(_toolCallId, params) {

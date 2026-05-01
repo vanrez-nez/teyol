@@ -18,7 +18,7 @@ export class LogModeSelectorComponent extends Container {
 			{
 				value: "app",
 				label: currentMode === "app" ? "App  (current)" : "App",
-				description: "Single shared log at ~/.akah/agent/akah.log",
+				description: "Single shared log at ~/.teyol/agent/teyol.log",
 			},
 			{
 				value: "session",

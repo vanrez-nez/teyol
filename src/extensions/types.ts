@@ -258,7 +258,7 @@ export interface ExtensionContext {
 	abort(): void;
 	/** Whether there are queued messages waiting */
 	hasPendingMessages(): boolean;
-	/** Gracefully shutdown Akah and exit. Available in all contexts. */
+	/** Gracefully shutdown Teyol and exit. Available in all contexts. */
 	shutdown(): void;
 	/** Get current context usage for the active model. */
 	getContextUsage(): ContextUsage | undefined;
@@ -1020,7 +1020,7 @@ export interface ExtensionAPI {
 // Provider Registration Types
 // ============================================================================
 
-/** Configuration for registering a provider via akah.registerProvider(). */
+/** Configuration for registering a provider via teyol.registerProvider(). */
 export interface ProviderConfig {
 	/** Display name for the provider in UI. */
 	name?: string;
@@ -1078,7 +1078,7 @@ export interface ProviderModelConfig {
 }
 
 /** Extension factory function type. Supports both sync and async initialization. */
-export type ExtensionFactory = (akah: ExtensionAPI) => void | Promise<void>;
+export type ExtensionFactory = (teyol: ExtensionAPI) => void | Promise<void>;
 
 // ============================================================================
 // Loaded Extension Types
@@ -1164,7 +1164,7 @@ export interface ExtensionRuntimeState {
 }
 
 /**
- * Action implementations for akah.* API methods.
+ * Action implementations for teyol.* API methods.
  */
 export interface ExtensionActions {
 	sendMessage: SendMessageHandler;

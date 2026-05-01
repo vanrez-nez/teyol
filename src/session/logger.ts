@@ -78,7 +78,7 @@ let state: LoggerState = {
 
 function resolvePath(mode: LogMode, sessionLogDir: string | undefined): string {
 	if (mode === "session" && sessionLogDir) {
-		return join(sessionLogDir, "akah.log");
+		return join(sessionLogDir, "teyol.log");
 	}
 	return getLogPath();
 }

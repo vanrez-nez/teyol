@@ -44,7 +44,7 @@ const VIRTUAL_MODULES: Record<string, unknown> = {
 	"@sinclair/typebox": _bundledTypebox,
 	"@sinclair/typebox/compiler": _bundledTypeboxCompile,
 	"@sinclair/typebox/value": _bundledTypeboxValue,
-	"@akah": _bundledAiCli,
+	"@teyol": _bundledAiCli,
 };
 
 const require = createRequire(import.meta.url);
@@ -75,7 +75,7 @@ function getAliases(): Record<string, string> {
 	};
 
 	_aliases = {
-		"@akah": packageIndex,
+		"@teyol": packageIndex,
 		typebox: typeboxEntry,
 		"typebox/compiler": typeboxCompileEntry,
 		"typebox/value": typeboxValueEntry,
@@ -439,19 +439,19 @@ export async function loadExtensions(paths: string[], cwd: string, eventBus?: Ev
 	};
 }
 
-interface AkahManifest {
+interface TeyolManifest {
 	extensions?: string[];
 	themes?: string[];
 	skills?: string[];
 	prompts?: string[];
 }
 
-function readAkahManifest(packageJsonPath: string): AkahManifest | null {
+function readTeyolManifest(packageJsonPath: string): TeyolManifest | null {
 	try {
 		const content = fs.readFileSync(packageJsonPath, "utf-8");
 		const pkg = JSON.parse(content);
-		if (pkg.akah && typeof pkg.akah === "object") {
-			return pkg.akah as AkahManifest;
+		if (pkg.teyol && typeof pkg.teyol === "object") {
+			return pkg.teyol as TeyolManifest;
 		}
 		return null;
 	} catch {
@@ -467,16 +467,16 @@ function isExtensionFile(name: string): boolean {
  * Resolve extension entry points from a directory.
  *
  * Checks for:
- * 1. package.json with "akah.extensions" field -> returns declared paths
+ * 1. package.json with "teyol.extensions" field -> returns declared paths
  * 2. index.ts or index.js -> returns the index file
  *
  * Returns resolved paths or null if no entry points found.
  */
 function resolveExtensionEntries(dir: string): string[] | null {
-	// Check for package.json with "akah" field first
+	// Check for package.json with "teyol" field first
 	const packageJsonPath = path.join(dir, "package.json");
 	if (fs.existsSync(packageJsonPath)) {
-		const manifest = readAkahManifest(packageJsonPath);
+		const manifest = readTeyolManifest(packageJsonPath);
 		if (manifest?.extensions?.length) {
 			const entries: string[] = [];
 			for (const extPath of manifest.extensions) {
@@ -510,7 +510,7 @@ function resolveExtensionEntries(dir: string): string[] | null {
  * Discovery rules:
  * 1. Direct files: `extensions/*.ts` or `*.js` → load
  * 2. Subdirectory with index: `extensions/* /index.ts` or `index.js` → load
- * 3. Subdirectory with package.json: `extensions/* /package.json` with "akah" field loads what it declares
+ * 3. Subdirectory with package.json: `extensions/* /package.json` with "teyol" field loads what it declares
  *
  * No recursion beyond one level. Complex packages must use package.json manifest.
  */
@@ -582,7 +582,7 @@ export async function discoverAndLoadExtensions(
 	for (const p of configuredPaths) {
 		const resolved = resolvePath(p, cwd);
 		if (fs.existsSync(resolved) && fs.statSync(resolved).isDirectory()) {
-			// Check for package.json with akah manifest or index.ts
+			// Check for package.json with teyol manifest or index.ts
 			const entries = resolveExtensionEntries(resolved);
 			if (entries) {
 				addPaths(entries);

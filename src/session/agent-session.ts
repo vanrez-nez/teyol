@@ -932,7 +932,7 @@ export class AgentSession {
 
   /**
    * Send a prompt to the agent.
-   * - Handles extension commands (registered via akah.registerCommand) immediately, even during streaming
+   * - Handles extension commands (registered via teyol.registerCommand) immediately, even during streaming
    * - Expands file-based prompt templates by default
    * - During streaming, queues via steer() or followUp() based on streamingBehavior option
    * - Validates model and API key before sending (when not streaming)
@@ -946,7 +946,7 @@ export class AgentSession {
 
     try {
       // Handle extension commands first (execute immediately, even during streaming)
-      // Extension commands manage their own LLM interaction via akah.sendMessage()
+      // Extension commands manage their own LLM interaction via teyol.sendMessage()
       if (expandPromptTemplates && text.startsWith("/")) {
         const handled = await this._tryExecuteExtensionCommand(text);
         if (handled) {
@@ -2882,7 +2882,7 @@ export class AgentSession {
    * @param outputPath Optional output path (defaults to session directory)
    * @returns Path to exported file
    */
-  async exportToHtml(outputPath: string, themeName = "akah-dark"): Promise<void> {
+  async exportToHtml(outputPath: string, themeName = "teyol-dark"): Promise<void> {
     throw new Error("HTML export not implemented in this version.");
   }
 

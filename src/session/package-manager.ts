@@ -38,7 +38,7 @@ const UPDATE_CHECK_CONCURRENCY = 4;
 const GIT_UPDATE_CONCURRENCY = 4;
 
 function isOfflineModeEnabled(): boolean {
-	const value = process.env.AKAH_OFFLINE;
+	const value = process.env.TEYOL_OFFLINE;
 	if (!value) return false;
 	return value === "1" || value.toLowerCase() === "true" || value.toLowerCase() === "yes";
 }
@@ -143,7 +143,7 @@ interface GitUpdateTarget extends ConfiguredUpdateSource {
 	parsed: GitSource;
 }
 
-interface AkahManifest {
+interface TeyolManifest {
 	extensions?: string[];
 	skills?: string[];
 	prompts?: string[];
@@ -485,11 +485,11 @@ function collectAutoThemeEntries(dir: string): string[] {
 	return entries;
 }
 
-function readAkahManifestFile(packageJsonPath: string): AkahManifest | null {
+function readTeyolManifestFile(packageJsonPath: string): TeyolManifest | null {
 	try {
 		const content = readFileSync(packageJsonPath, "utf-8");
-		const pkg = JSON.parse(content) as { akah?: AkahManifest };
-		return pkg.akah ?? null;
+		const pkg = JSON.parse(content) as { teyol?: TeyolManifest };
+		return pkg.teyol ?? null;
 	} catch {
 		return null;
 	}
@@ -498,7 +498,7 @@ function readAkahManifestFile(packageJsonPath: string): AkahManifest | null {
 function resolveExtensionEntries(dir: string): string[] | null {
 	const packageJsonPath = join(dir, "package.json");
 	if (existsSync(packageJsonPath)) {
-		const manifest = readAkahManifestFile(packageJsonPath);
+		const manifest = readTeyolManifestFile(packageJsonPath);
 		if (manifest?.extensions?.length) {
 			const entries: string[] = [];
 			for (const extPath of manifest.extensions) {
@@ -1784,7 +1784,7 @@ export class DefaultPackageManager implements PackageManager {
 		this.ensureGitIgnore(installRoot);
 		const packageJsonPath = join(installRoot, "package.json");
 		if (!existsSync(packageJsonPath)) {
-			const pkgJson = { name: "akah-extensions", private: true };
+			const pkgJson = { name: "teyol-extensions", private: true };
 			writeFileSync(packageJsonPath, JSON.stringify(pkgJson, null, 2), "utf-8");
 		}
 	}
@@ -1860,7 +1860,7 @@ export class DefaultPackageManager implements PackageManager {
 			.update(`${prefix}-${suffix ?? ""}`)
 			.digest("hex")
 			.slice(0, 8);
-		return join(tmpdir(), "akah-extensions", prefix, hash, suffix ?? "");
+		return join(tmpdir(), "teyol-extensions", prefix, hash, suffix ?? "");
 	}
 
 	private getBaseDirForScope(scope: SourceScope): string {
@@ -1908,10 +1908,10 @@ export class DefaultPackageManager implements PackageManager {
 			return true;
 		}
 
-		const manifest = this.readAkahManifest(packageRoot);
+		const manifest = this.readTeyolManifest(packageRoot);
 		if (manifest) {
 			for (const resourceType of RESOURCE_TYPES) {
-				const entries = manifest[resourceType as keyof AkahManifest];
+				const entries = manifest[resourceType as keyof TeyolManifest];
 				this.addManifestEntries(
 					entries,
 					packageRoot,
@@ -1944,8 +1944,8 @@ export class DefaultPackageManager implements PackageManager {
 		target: Map<string, { metadata: PathMetadata; enabled: boolean }>,
 		metadata: PathMetadata,
 	): void {
-		const manifest = this.readAkahManifest(packageRoot);
-		const entries = manifest?.[resourceType as keyof AkahManifest];
+		const manifest = this.readTeyolManifest(packageRoot);
+		const entries = manifest?.[resourceType as keyof TeyolManifest];
 		if (entries) {
 			this.addManifestEntries(entries, packageRoot, resourceType, target, metadata);
 			return;
@@ -1995,8 +1995,8 @@ export class DefaultPackageManager implements PackageManager {
 		packageRoot: string,
 		resourceType: ResourceType,
 	): { allFiles: string[]; enabledByManifest: Set<string> } {
-		const manifest = this.readAkahManifest(packageRoot);
-		const entries = manifest?.[resourceType as keyof AkahManifest];
+		const manifest = this.readTeyolManifest(packageRoot);
+		const entries = manifest?.[resourceType as keyof TeyolManifest];
 		if (entries && entries.length > 0) {
 			const allFiles = this.collectFilesFromManifestEntries(entries, packageRoot, resourceType);
 			const manifestPatterns = entries.filter(isOverridePattern);
@@ -2013,7 +2013,7 @@ export class DefaultPackageManager implements PackageManager {
 		return { allFiles, enabledByManifest: new Set(allFiles) };
 	}
 
-	private readAkahManifest(packageRoot: string): AkahManifest | null {
+	private readTeyolManifest(packageRoot: string): TeyolManifest | null {
 		const packageJsonPath = join(packageRoot, "package.json");
 		if (!existsSync(packageJsonPath)) {
 			return null;
@@ -2021,8 +2021,8 @@ export class DefaultPackageManager implements PackageManager {
 
 		try {
 			const content = readFileSync(packageJsonPath, "utf-8");
-			const pkg = JSON.parse(content) as { akah?: AkahManifest };
-			return pkg.akah ?? null;
+			const pkg = JSON.parse(content) as { teyol?: TeyolManifest };
+			return pkg.teyol ?? null;
 		} catch {
 			return null;
 		}
