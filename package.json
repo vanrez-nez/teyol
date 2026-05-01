@@ -1,7 +1,7 @@
 {
   "name": "teyol",
   "version": "0.1.0",
-  "description": "A generic, extendable AI assistant CLI.",
+  "description": "Local-first AI harness for managing identity, memory, and tools across LLMs.",
   "type": "module",
   "main": "dist/cli/main.js",
   "bin": {
