@@ -21,6 +21,9 @@ import {
 } from "../dist/shell/tui/components/shell-layout.js";
 import { initTheme, theme } from "../dist/shell/theme/theme.js";
 import { createCliState } from "../dist/shell/tui/state/index.js";
+import { dispatchBuiltInCommand } from "../dist/shell/tui/commands/built-in.js";
+import { buildAutocomplete, getBuiltInCommandConflictDiagnostics } from "../dist/shell/tui/commands/autocomplete.js";
+import { buildHotkeyHelpMarkdown } from "../dist/shell/tui/hotkeys/help.js";
 import { visibleWidth } from "../dist/tui/index.js";
 
 const repoRoot = process.cwd();
@@ -206,6 +209,80 @@ function testUiDescriptorContracts() {
 	}
 }
 
+async function testBuiltInCommandDispatch() {
+	const calls = [];
+	const handlers = {
+		settings: () => calls.push(["settings"]),
+		scopedModels: async () => calls.push(["scopedModels"]),
+		model: async (text) => calls.push(["model", text]),
+		name: (text) => calls.push(["name", text]),
+		session: async (text) => calls.push(["session", text]),
+		hotkeys: () => calls.push(["hotkeys"]),
+		login: () => calls.push(["login"]),
+		logout: () => calls.push(["logout"]),
+		reload: async () => calls.push(["reload"]),
+		log: async (text) => calls.push(["log", text]),
+		exit: async () => calls.push(["exit"]),
+	};
+
+	assert.equal(await dispatchBuiltInCommand("/model select openrouter/auto", handlers), true);
+	assert.equal(await dispatchBuiltInCommand("/unknown", handlers), false);
+	assert.deepEqual(calls, [["model", "/model select openrouter/auto"]]);
+}
+
+function testInteractiveAutocompleteContracts() {
+	const extensionRunner = {
+		getRegisteredCommands() {
+			return [
+				{
+					name: "session",
+					invocationName: "session:extension",
+					description: "conflict",
+					sourceInfo: { path: "/tmp/ext.ts", scope: "user", source: "local" },
+				},
+				{
+					name: "calendar",
+					invocationName: "calendar",
+					description: "calendar command",
+					sourceInfo: { path: "/tmp/calendar.ts", scope: "project", source: "local" },
+				},
+			];
+		},
+	};
+
+	const diagnostics = getBuiltInCommandConflictDiagnostics(extensionRunner);
+	assert.equal(diagnostics.length, 1);
+	assert.match(diagnostics[0].message, /conflicts with built-in interactive command/);
+
+	const result = buildAutocomplete({
+		promptTemplates: [],
+		skills: [
+			{
+				name: "brief",
+				description: "Be concise",
+				filePath: "/tmp/SKILL.md",
+				sourceInfo: { path: "/tmp/SKILL.md", scope: "user", source: "local" },
+			},
+		],
+		enableSkillCommands: true,
+		extensionRunner,
+		cwd: repoRoot,
+		getModelArgumentCompletions: () => null,
+	});
+	assert.equal(typeof result.provider.getSuggestions, "function");
+	assert.deepEqual(Array.from(result.skillCommands.entries()), [["skill:brief", "/tmp/SKILL.md"]]);
+}
+
+function testHotkeyHelpContracts() {
+	const markdown = buildHotkeyHelpMarkdown({
+		platform: "win32",
+		extensionShortcuts: new Map([["ctrl+k", { description: "Calendar action", extensionPath: "/tmp/calendar.ts" }]]),
+	});
+	assert.match(markdown, /Keyboard|Navigation|Editing|Other/);
+	assert.match(markdown, /Ctrl\+Enter on Windows Terminal/);
+	assert.match(markdown, /Calendar action/);
+}
+
 function staticComponent(lines) {
 	return {
 		invalidate() {},
@@ -324,6 +401,9 @@ await testExtensionToolsActiveByDefault();
 await testNoToolsDisablesExtensionTools();
 await testToolAllowlist();
 await testExtensionModuleCanImportTeyol();
+await testBuiltInCommandDispatch();
+testInteractiveAutocompleteContracts();
+testHotkeyHelpContracts();
 testSystemPrompt();
 testCliHelp();
 testUnknownFlagDiagnostics();
