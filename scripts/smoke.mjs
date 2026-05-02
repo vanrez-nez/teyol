@@ -24,6 +24,18 @@ import { initTheme, theme } from "../dist/shell/theme/theme.js";
 import { createCliState } from "../dist/shell/tui/state/index.js";
 import { dispatchBuiltInCommand } from "../dist/shell/tui/commands/built-in.js";
 import { buildAutocomplete, getBuiltInCommandConflictDiagnostics } from "../dist/shell/tui/commands/autocomplete.js";
+import {
+	buildScopeGroups,
+	formatAppKeyDisplay,
+	formatContextPath,
+	formatDiagnostics,
+	formatDisplayPath,
+	formatLogFileDisplay,
+	formatSessionInfo,
+	getCompactExtensionLabels,
+	getShortPath,
+	getUserMessageText,
+} from "../dist/shell/tui/display-helpers.js";
 import { buildHotkeyHelpMarkdown } from "../dist/shell/tui/hotkeys/help.js";
 import { visibleWidth } from "../dist/tui/index.js";
 
@@ -212,26 +224,31 @@ function testUiDescriptorContracts() {
 
 async function testBuiltInCommandDispatch() {
 	const calls = [];
-	const handlers = {
-		settings: () => calls.push(["settings"]),
-		scopedModels: async () => calls.push(["scopedModels"]),
-		model: async (text) => calls.push(["model", text]),
-		name: (text) => calls.push(["name", text]),
-		session: async (text) => calls.push(["session", text]),
-		hotkeys: () => calls.push(["hotkeys"]),
-		login: () => calls.push(["login"]),
-		logout: () => calls.push(["logout"]),
+	const context = {
+		openSettings: () => calls.push(["settings"]),
+		openScopedModels: async () => calls.push(["scopedModels"]),
+		runModelCommand: async (text) => calls.push(["model", text]),
+		runNameCommand: (text) => calls.push(["name", text]),
+		runSessionCommand: async (text) => calls.push(["session", text]),
+		showHotkeys: () => calls.push(["hotkeys"]),
+		openAuth: async (mode) => calls.push(["auth", mode]),
 		reload: async () => calls.push(["reload"]),
-		log: async (text) => calls.push(["log", text]),
-		exit: async () => calls.push(["exit"]),
+		runLogCommand: async (text) => calls.push(["log", text]),
+		shutdown: async () => calls.push(["exit"]),
+		getModelArgumentCompletions: () => null,
+		isDevMode: () => true,
 	};
 
-	assert.equal(await dispatchBuiltInCommand("/model select openrouter/auto", handlers), true);
-	assert.equal(await dispatchBuiltInCommand("/unknown", handlers), false);
-	assert.deepEqual(calls, [["model", "/model select openrouter/auto"]]);
+	assert.equal(await dispatchBuiltInCommand("/model select openrouter/auto", context), true);
+	assert.equal(await dispatchBuiltInCommand("/quit", context), true);
+	assert.equal(await dispatchBuiltInCommand("/unknown", context), false);
+	assert.deepEqual(calls, [
+		["model", "/model select openrouter/auto"],
+		["exit"],
+	]);
 }
 
-function testInteractiveAutocompleteContracts() {
+async function testInteractiveAutocompleteContracts() {
 	const extensionRunner = {
 		getRegisteredCommands() {
 			return [
@@ -255,6 +272,24 @@ function testInteractiveAutocompleteContracts() {
 	assert.equal(diagnostics.length, 1);
 	assert.match(diagnostics[0].message, /conflicts with built-in interactive command/);
 
+	const commandContext = {
+		openSettings: () => {},
+		openScopedModels: async () => {},
+		runModelCommand: async () => {},
+		runNameCommand: () => {},
+		runSessionCommand: async () => {},
+		showHotkeys: () => {},
+		openAuth: async () => {},
+		reload: async () => {},
+		runLogCommand: async () => {},
+		shutdown: async () => {},
+		getModelArgumentCompletions: (prefix, valuePrefix) =>
+			prefix === "open" && valuePrefix === "select "
+				? [{ value: "openrouter/auto", label: "openrouter/auto", description: "model" }]
+				: null,
+		isDevMode: () => true,
+	};
+
 	const result = buildAutocomplete({
 		promptTemplates: [],
 		skills: [
@@ -268,10 +303,22 @@ function testInteractiveAutocompleteContracts() {
 		enableSkillCommands: true,
 		extensionRunner,
 		cwd: repoRoot,
-		getModelArgumentCompletions: () => null,
+		commandContext,
 	});
 	assert.equal(typeof result.provider.getSuggestions, "function");
 	assert.deepEqual(Array.from(result.skillCommands.entries()), [["skill:brief", "/tmp/SKILL.md"]]);
+
+	const modelText = "/model select open";
+	const modelSuggestions = await result.provider.getSuggestions([modelText], 0, modelText.length, {
+		signal: new AbortController().signal,
+	});
+	assert.deepEqual(modelSuggestions?.items.map((item) => item.value), ["openrouter/auto"]);
+
+	const logText = "/log ";
+	const logSuggestions = await result.provider.getSuggestions([logText], 0, logText.length, {
+		signal: new AbortController().signal,
+	});
+	assert.ok(logSuggestions?.items.some((item) => item.value === "enable"));
 }
 
 function testHotkeyHelpContracts() {
@@ -282,6 +329,82 @@ function testHotkeyHelpContracts() {
 	assert.match(markdown, /Keyboard|Navigation|Editing|Other/);
 	assert.match(markdown, /Ctrl\+Enter on Windows Terminal/);
 	assert.match(markdown, /Calendar action/);
+}
+
+function testDisplayHelperContracts() {
+	initTheme("dark", false);
+	const homeDir = "/Users/test";
+	const cwd = "/Users/test/project";
+
+	assert.equal(formatDisplayPath("/Users/test/project/file.md", homeDir), "~/project/file.md");
+	assert.equal(formatContextPath("/Users/test/project/docs/notes.md", cwd, homeDir), "docs/notes.md");
+	assert.equal(formatContextPath("/Users/test/other/notes.md", cwd, homeDir), "~/other/notes.md");
+
+	const packageSource = { source: "npm:@scope/pkg", scope: "project", path: "/tmp/pkg", baseDir: "/tmp/pkg" };
+	assert.equal(getShortPath("/tmp/pkg/extensions/calendar/index.ts", packageSource, homeDir), "extensions/calendar/index.ts");
+	assert.deepEqual(getCompactExtensionLabels([{ path: "/tmp/pkg/extensions/calendar/index.ts", sourceInfo: packageSource }], homeDir), [
+		"@scope/pkg:calendar",
+	]);
+
+	const groups = buildScopeGroups([
+		{ path: "/Users/test/project/a.md", sourceInfo: { source: "local", scope: "project", path: "/Users/test/project/a.md" } },
+		{ path: "/Users/test/b.md", sourceInfo: { source: "local", scope: "user", path: "/Users/test/b.md" } },
+		{ path: "/tmp/pkg/extensions/calendar/index.ts", sourceInfo: packageSource },
+	]);
+	assert.deepEqual(groups.map((group) => group.scope), ["project", "user"]);
+	assert.equal(groups[0].packages.get("npm:@scope/pkg").length, 1);
+
+	const diagnostics = formatDiagnostics(
+		[
+			{
+				type: "collision",
+				message: "collision",
+				collision: {
+					name: "calendar",
+					winnerPath: "/tmp/pkg/extensions/calendar/index.ts",
+					loserPath: "/Users/test/project/extensions/calendar/index.ts",
+				},
+			},
+		],
+		new Map([["/tmp/pkg", packageSource]]),
+		homeDir,
+	);
+	assert.match(diagnostics, /"calendar" collision/);
+	assert.match(diagnostics, /npm:@scope\/pkg \(project\) extensions\/calendar\/index.ts/);
+	assert.match(diagnostics, /skipped/);
+
+	assert.equal(
+		getUserMessageText({
+			role: "user",
+			content: [
+				{ type: "text", text: "hello" },
+				{ type: "image", image: "ignored" },
+				{ type: "text", text: " world" },
+			],
+		}),
+		"hello world",
+	);
+	assert.equal(formatAppKeyDisplay("ctrl+shift+p/alt+enter"), "Ctrl+Shift+P/Alt+Enter");
+
+	const sessionInfo = formatSessionInfo(
+		{
+			sessionFile: undefined,
+			sessionId: "session-1",
+			userMessages: 1,
+			assistantMessages: 2,
+			toolCalls: 3,
+			toolResults: 4,
+			totalMessages: 7,
+			tokens: { input: 1000, output: 2000, cacheRead: 0, cacheWrite: 3, total: 3003 },
+			cost: 0.25,
+		},
+		"Research",
+	);
+	assert.match(sessionInfo, /Session Info/);
+	assert.match(sessionInfo, /Research/);
+	assert.match(sessionInfo, /Cache Write/);
+	assert.match(formatLogFileDisplay("/tmp/app.log", false, ""), /no log file yet/);
+	assert.match(formatLogFileDisplay("/tmp/app.log", true, "recent"), /recent/);
 }
 
 function staticComponent(lines) {
@@ -453,8 +576,9 @@ await testNoToolsDisablesExtensionTools();
 await testToolAllowlist();
 await testExtensionModuleCanImportTeyol();
 await testBuiltInCommandDispatch();
-testInteractiveAutocompleteContracts();
+await testInteractiveAutocompleteContracts();
 testHotkeyHelpContracts();
+testDisplayHelperContracts();
 testSystemPrompt();
 testCliHelp();
 testUnknownFlagDiagnostics();

@@ -1,62 +1,53 @@
-export interface BuiltInCommandHandlers {
-	settings(): void;
-	scopedModels(): Promise<void>;
-	model(text: string): Promise<void>;
-	name(text: string): void;
-	session(text: string): Promise<void>;
-	hotkeys(): void;
-	login(): void;
-	logout(): void;
-	reload(): Promise<void>;
-	log(text: string): Promise<void>;
-	exit(): Promise<void>;
+import { exitCommand } from "./built-ins/exit.js";
+import { hotkeysCommand } from "./built-ins/hotkeys.js";
+import { logCommand } from "./built-ins/log.js";
+import { loginCommand } from "./built-ins/login.js";
+import { logoutCommand } from "./built-ins/logout.js";
+import { modelCommand } from "./built-ins/model.js";
+import { nameCommand } from "./built-ins/name.js";
+import { reloadCommand } from "./built-ins/reload.js";
+import { scopedModelsCommand } from "./built-ins/scoped-models.js";
+import { sessionCommand } from "./built-ins/session.js";
+import { settingsCommand } from "./built-ins/settings.js";
+import type { TuiCommand, TuiCommandContext } from "./types.js";
+import { commandNames, matchesCommand, parseCommandInvocation, toSlashCommand } from "./types.js";
+
+export const BUILT_IN_TUI_COMMANDS: ReadonlyArray<TuiCommand> = [
+	settingsCommand,
+	scopedModelsCommand,
+	modelCommand,
+	nameCommand,
+	sessionCommand,
+	hotkeysCommand,
+	loginCommand,
+	logoutCommand,
+	reloadCommand,
+	logCommand,
+	exitCommand,
+];
+
+export function getBuiltInCommandNames(): Set<string> {
+	return new Set(BUILT_IN_TUI_COMMANDS.flatMap((command) => commandNames(command)));
 }
 
-export async function dispatchBuiltInCommand(text: string, handlers: BuiltInCommandHandlers): Promise<boolean> {
-	if (text === "/settings") {
-		handlers.settings();
-		return true;
-	}
-	if (text === "/scoped-models") {
-		await handlers.scopedModels();
-		return true;
-	}
-	if (text === "/model" || text.startsWith("/model ")) {
-		await handlers.model(text);
-		return true;
-	}
-	if (text === "/name" || text.startsWith("/name ")) {
-		handlers.name(text);
-		return true;
-	}
-	if (text === "/session" || text.startsWith("/session ")) {
-		await handlers.session(text);
-		return true;
-	}
-	if (text === "/hotkeys") {
-		handlers.hotkeys();
-		return true;
-	}
-	if (text === "/login") {
-		handlers.login();
-		return true;
-	}
-	if (text === "/logout") {
-		handlers.logout();
-		return true;
-	}
-	if (text === "/reload") {
-		await handlers.reload();
-		return true;
-	}
-	if (text === "/log" || text.startsWith("/log ")) {
-		await handlers.log(text);
-		return true;
-	}
-	if (text === "/exit" || text === "/quit") {
-		await handlers.exit();
-		return true;
+export function getBuiltInSlashCommands(context: TuiCommandContext) {
+	return BUILT_IN_TUI_COMMANDS.map((command) => toSlashCommand(command, context)).filter((command) => command !== null);
+}
+
+export async function dispatchBuiltInCommand(text: string, context: TuiCommandContext): Promise<boolean> {
+	const parsed = parseCommandInvocation(text);
+	if (!parsed) {
+		return false;
 	}
 
-	return false;
+	const command = BUILT_IN_TUI_COMMANDS.find((candidate) => matchesCommand(candidate, parsed.name));
+	if (!command) {
+		return false;
+	}
+
+	await command.execute(context, {
+		...parsed,
+		canonicalName: command.name,
+	});
+	return true;
 }
