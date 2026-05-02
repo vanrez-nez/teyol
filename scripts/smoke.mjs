@@ -12,6 +12,14 @@ import { SessionManager } from "../dist/session/session-manager.js";
 import { SettingsManager } from "../dist/session/settings-manager.js";
 import { buildSystemPrompt } from "../dist/session/system-prompt.js";
 import { validateUiDescriptorFixtures } from "../dist/session/ui-descriptors.fixtures.js";
+import {
+	ShellLayoutComponent,
+	SIDEBAR_MIN_TERMINAL_WIDTH,
+	SIDEBAR_SEPARATOR,
+	SIDEBAR_WIDTH,
+} from "../dist/cli/interactive/components/shell-layout.js";
+import { initTheme, theme } from "../dist/cli/interactive/theme/theme.js";
+import { visibleWidth } from "../dist/tui/index.js";
 
 const repoRoot = process.cwd();
 const cliRoot = mkdtempSync(join(tmpdir(), "teyol-cli-"));
@@ -167,6 +175,46 @@ function testUiDescriptorContracts() {
 	}
 }
 
+function staticComponent(lines) {
+	return {
+		invalidate() {},
+		render() {
+			return lines;
+		},
+	};
+}
+
+function testShellLayoutNarrowWidth() {
+	initTheme("dark", false);
+	const layout = new ShellLayoutComponent(staticComponent(["timeline"]), staticComponent(["sidebar"]));
+	assert.deepEqual(layout.render(SIDEBAR_MIN_TERMINAL_WIDTH - 1), ["timeline"]);
+}
+
+function testShellLayoutWideWidth() {
+	initTheme("dark", false);
+	const layout = new ShellLayoutComponent(staticComponent(["timeline"]), staticComponent(["sidebar"]));
+	const width = SIDEBAR_MIN_TERMINAL_WIDTH;
+	const [line] = layout.render(width);
+
+	assert.equal(visibleWidth(line), width);
+	assert.ok(line.includes(theme.getFgAnsi("sidebarBorder")));
+	assert.ok(line.includes(theme.getBgAnsi("sidebarBg")));
+	assert.ok(line.includes(`${theme.getFgAnsi("sidebarText")}sidebar`));
+	assert.equal(line.slice(0, "timeline".length), "timeline");
+}
+
+function testShellLayoutUsesTallerSide() {
+	initTheme("dark", false);
+	const layout = new ShellLayoutComponent(staticComponent(["timeline"]), staticComponent(["one", "two"]));
+	const lines = layout.render(SIDEBAR_MIN_TERMINAL_WIDTH);
+
+	assert.equal(lines.length, 2);
+	assert.equal(visibleWidth(lines[1]), SIDEBAR_MIN_TERMINAL_WIDTH);
+	assert.ok(lines[1].includes(theme.getFgAnsi("sidebarBorder")));
+	assert.ok(lines[1].includes(theme.getBgAnsi("sidebarBg")));
+	assert.ok(lines[1].includes(`${theme.getFgAnsi("sidebarText")}two`));
+}
+
 await testNoToolsByDefault();
 await testExtensionToolsActiveByDefault();
 await testNoToolsDisablesExtensionTools();
@@ -175,5 +223,8 @@ testSystemPrompt();
 testCliHelp();
 testUnknownFlagDiagnostics();
 testUiDescriptorContracts();
+testShellLayoutNarrowWidth();
+testShellLayoutWideWidth();
+testShellLayoutUsesTallerSide();
 
 console.log("smoke ok");

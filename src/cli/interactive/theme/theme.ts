@@ -39,6 +39,11 @@ const ThemeJsonSchema = Type.Object({
 		dim: ColorValueSchema,
 		text: ColorValueSchema,
 		thinkingText: ColorValueSchema,
+		// Sidebar (4 colors)
+		sidebarBorder: ColorValueSchema,
+		sidebarBg: ColorValueSchema,
+		sidebarText: ColorValueSchema,
+		sidebarMuted: ColorValueSchema,
 		// Backgrounds & Content Text (11 colors)
 		selectedBg: ColorValueSchema,
 		userMessageBg: ColorValueSchema,
@@ -110,6 +115,9 @@ export type ThemeColor =
 	| "dim"
 	| "text"
 	| "thinkingText"
+	| "sidebarBorder"
+	| "sidebarText"
+	| "sidebarMuted"
 	| "userMessageText"
 	| "customMessageText"
 	| "customMessageLabel"
@@ -146,6 +154,7 @@ export type ThemeColor =
 
 export type ThemeBg =
 	| "selectedBg"
+	| "sidebarBg"
 	| "userMessageBg"
 	| "customMessageBg"
 	| "toolPendingBg"
@@ -590,6 +599,7 @@ function createTheme(themeJson: ThemeJson, mode?: ColorMode, sourcePath?: string
 	const bgColors: Record<ThemeBg, string | number> = {} as Record<ThemeBg, string | number>;
 	const bgColorKeys: Set<string> = new Set([
 		"selectedBg",
+		"sidebarBg",
 		"userMessageBg",
 		"customMessageBg",
 		"toolPendingBg",

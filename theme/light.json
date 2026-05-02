@@ -29,6 +29,10 @@
 		"dim": "dimGray",
 		"text": "",
 		"thinkingText": "mediumGray",
+		"sidebarBorder": "lightGray",
+		"sidebarBg": "toolPendingBg",
+		"sidebarText": "",
+		"sidebarMuted": "mediumGray",
 
 		"selectedBg": "selectedBg",
 		"userMessageBg": "userMsgBg",

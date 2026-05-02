@@ -30,6 +30,10 @@
 		"dim": "dimGray",
 		"text": "",
 		"thinkingText": "gray",
+		"sidebarBorder": "darkGray",
+		"sidebarBg": "toolPendingBg",
+		"sidebarText": "",
+		"sidebarMuted": "gray",
 
 		"selectedBg": "selectedBg",
 		"userMessageBg": "userMsgBg",

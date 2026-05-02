@@ -46,6 +46,10 @@
 				"dim",
 				"text",
 				"thinkingText",
+				"sidebarBorder",
+				"sidebarBg",
+				"sidebarText",
+				"sidebarMuted",
 				"selectedBg",
 				"userMessageBg",
 				"userMessageText",
@@ -130,6 +134,22 @@
 				"thinkingText": {
 					"$ref": "#/$defs/colorValue",
 					"description": "Thinking block text color"
+				},
+				"sidebarBorder": {
+					"$ref": "#/$defs/colorValue",
+					"description": "Sidebar vertical divider"
+				},
+				"sidebarBg": {
+					"$ref": "#/$defs/colorValue",
+					"description": "Sidebar panel background"
+				},
+				"sidebarText": {
+					"$ref": "#/$defs/colorValue",
+					"description": "Sidebar primary text"
+				},
+				"sidebarMuted": {
+					"$ref": "#/$defs/colorValue",
+					"description": "Sidebar secondary text"
 				},
 				"selectedBg": {
 					"$ref": "#/$defs/colorValue",

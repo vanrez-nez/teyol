@@ -118,6 +118,7 @@ import { ScopedModelsSelectorComponent } from "./interactive/components/scoped-m
 import { type SessionAction, SessionActionsSelectorComponent } from "./interactive/components/session-actions-selector.js";
 import { SessionSelectorComponent } from "./interactive/components/session-selector.js";
 import { SettingsSelectorComponent } from "./interactive/components/settings-selector.js";
+import { ShellLayoutComponent } from "./interactive/components/shell-layout.js";
 import { SkillInvocationMessageComponent } from "./interactive/components/skill-invocation-message.js";
 import { ToolExecutionComponent } from "./interactive/components/tool-execution.js";
 import { TreeSelectorComponent } from "./interactive/components/tree-selector.js";
@@ -215,6 +216,9 @@ export interface InteractiveModeOptions {
 export class InteractiveMode {
   private runtimeHost: AgentSessionRuntime;
   private ui: TUI;
+  private shellLayout: ShellLayoutComponent;
+  private timelineContainer: Container;
+  private sidebarContainer: Container;
   private chatContainer: Container;
   private pendingMessagesContainer: Container;
   private statusContainer: Container;
@@ -342,6 +346,9 @@ export class InteractiveMode {
     this.version = VERSION;
     this.ui = new TUI(new ProcessTerminal(), this.settingsManager.getShowHardwareCursor());
     this.ui.setClearOnShrink(this.settingsManager.getClearOnShrink());
+    this.timelineContainer = new Container();
+    this.sidebarContainer = new Container();
+    this.shellLayout = new ShellLayoutComponent(this.timelineContainer, this.sidebarContainer);
     this.headerContainer = new Container();
     this.chatContainer = new Container();
     this.pendingMessagesContainer = new Container();
@@ -592,9 +599,6 @@ export class InteractiveMode {
     // Both are needed: fd for autocomplete, rg for grep tool and bash commands
     // ensureTool calls removed for generic CLI
 
-    // Add header container as first child
-    this.ui.addChild(this.headerContainer);
-
     // Add header with keybindings from config (unless silenced)
     if (this.options.verbose || !this.settingsManager.getQuietStartup()) {
       const versionLine = `${APP_NAME} v${this.version}`;
@@ -657,13 +661,15 @@ export class InteractiveMode {
       this.headerContainer.addChild(this.builtInHeader);
     }
 
-    this.ui.addChild(this.chatContainer);
-    this.ui.addChild(this.pendingMessagesContainer);
-    this.ui.addChild(this.statusContainer);
+    this.timelineContainer.addChild(this.headerContainer);
+    this.timelineContainer.addChild(this.chatContainer);
+    this.timelineContainer.addChild(this.pendingMessagesContainer);
+    this.timelineContainer.addChild(this.statusContainer);
     this.renderWidgets(); // Initialize with default spacer
-    this.ui.addChild(this.widgetContainerAbove);
-    this.ui.addChild(this.editorContainer);
-    this.ui.addChild(this.widgetContainerBelow);
+    this.timelineContainer.addChild(this.widgetContainerAbove);
+    this.timelineContainer.addChild(this.editorContainer);
+    this.timelineContainer.addChild(this.widgetContainerBelow);
+    this.ui.addChild(this.shellLayout);
     this.ui.addChild(this.footer);
     this.ui.setFocus(this.editor);
 
