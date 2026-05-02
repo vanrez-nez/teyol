@@ -124,6 +124,7 @@ import { ToolExecutionComponent } from "./interactive/components/tool-execution.
 import { TreeSelectorComponent } from "./interactive/components/tree-selector.js";
 import { UserMessageComponent } from "./interactive/components/user-message.js";
 import { UserMessageSelectorComponent } from "./interactive/components/user-message-selector.js";
+import { createCliState, type CliState, type QueuedMessage } from "./state/index.js";
 import {
   getAvailableThemes,
   getAvailableThemesWithPaths,
@@ -165,11 +166,6 @@ class ExpandableText extends Text implements Expandable {
     this.setText(expanded ? this.getExpandedText() : this.getCollapsedText());
   }
 }
-
-type CompactionQueuedMessage = {
-  text: string;
-  mode: "steer" | "followUp";
-};
 
 function isUnknownModel(model: Model<any> | undefined): boolean {
   return !!model && model.provider === "unknown" && model.id === "unknown" && model.api === "unknown";
@@ -215,6 +211,7 @@ export interface InteractiveModeOptions {
 
 export class InteractiveMode {
   private runtimeHost: AgentSessionRuntime;
+  private state: CliState;
   private ui: TUI;
   private shellLayout: ShellLayoutComponent;
   private timelineContainer: Container;
@@ -237,12 +234,8 @@ export class InteractiveMode {
   private isInitialized = false;
   private onInputCallback?: (text: string) => void;
   private loadingAnimation: Loader | undefined = undefined;
-  private workingMessage: string | undefined = undefined;
-  private workingVisible = true;
-  private workingIndicatorOptions: LoaderIndicatorOptions | undefined = undefined;
   private readonly defaultWorkingMessage = "Working...";
   private readonly defaultHiddenThinkingLabel = "Thinking...";
-  private hiddenThinkingLabel = this.defaultHiddenThinkingLabel;
 
   private lastSigintTime = 0;
   private lastEscapeTime = 0;
@@ -259,12 +252,6 @@ export class InteractiveMode {
 
   // Tool execution tracking: toolCallId -> component
   private pendingTools = new Map<string, ToolExecutionComponent>();
-
-  // Tool output expansion state
-  private toolOutputExpanded = false;
-
-  // Thinking block visibility state
-  private hideThinkingBlock = false;
 
   // Skill commands: command name -> skill file path
   private skillCommands = new Map<string, string>();
@@ -288,10 +275,6 @@ export class InteractiveMode {
   private retryCountdown: CountdownTimer | undefined = undefined;
   private retryEscapeHandler?: () => void;
 
-  // Messages queued while compaction is running
-  private compactionQueuedMessages: CompactionQueuedMessage[] = [];
-
-  // Shutdown state
   private shutdownRequested = false;
 
   // Extension UI state
@@ -309,14 +292,8 @@ export class InteractiveMode {
   // Custom footer from extension (undefined = use built-in footer)
   private customFooter: (Component & { dispose?(): void }) | undefined = undefined;
 
-  // Header container that holds the built-in or custom header
-  private headerContainer: Container;
-
-  // Built-in header (logo + keybinding hints)
-  private builtInHeader: Component | undefined = undefined;
-
-  // Custom header from extension (undefined = use built-in header)
-  private customHeader: (Component & { dispose?(): void }) | undefined = undefined;
+  // Built-in startup content rendered into the scrollable timeline.
+  private startupContent: Component | undefined = undefined;
 
   // Convenience accessors
   private get session(): AgentSession {
@@ -332,11 +309,72 @@ export class InteractiveMode {
     return this.session.settingsManager;
   }
 
+  private get toolOutputExpanded(): boolean {
+    return this.state.shell.$toolOutputExpanded.getState();
+  }
+
+  private set toolOutputExpanded(expanded: boolean) {
+    this.state.shell.setToolsExpanded(expanded);
+  }
+
+  private get hideThinkingBlock(): boolean {
+    return this.state.shell.$hideThinkingBlock.getState();
+  }
+
+  private set hideThinkingBlock(hidden: boolean) {
+    this.state.shell.setHideThinkingBlock(hidden);
+  }
+
+  private get hiddenThinkingLabel(): string {
+    return this.state.shell.$hiddenThinkingLabel.getState();
+  }
+
+  private set hiddenThinkingLabel(label: string) {
+    this.state.shell.setHiddenThinkingLabel(label);
+  }
+
+  private get workingMessage(): string | undefined {
+    return this.state.shell.$working.getState().message;
+  }
+
+  private set workingMessage(message: string | undefined) {
+    this.state.shell.setWorkingMessage(message);
+  }
+
+  private get workingVisible(): boolean {
+    return this.state.shell.$working.getState().visible;
+  }
+
+  private set workingVisible(visible: boolean) {
+    this.state.shell.setWorkingVisible(visible);
+  }
+
+  private get workingIndicatorOptions(): LoaderIndicatorOptions | undefined {
+    return this.state.shell.$working.getState().indicator;
+  }
+
+  private set workingIndicatorOptions(options: LoaderIndicatorOptions | undefined) {
+    this.state.shell.setWorkingIndicator(options);
+  }
+
+  private get compactionQueuedMessages(): QueuedMessage[] {
+    return [...this.state.queue.$compactionQueuedMessages.getState()];
+  }
+
+  private set compactionQueuedMessages(messages: QueuedMessage[]) {
+    this.state.queue.restoreCompactionQueue(messages);
+  }
+
   constructor(
     runtimeHost: AgentSessionRuntime,
     private options: InteractiveModeOptions = {},
   ) {
     this.runtimeHost = runtimeHost;
+    this.state = createCliState({
+      hideThinkingBlock: this.settingsManager.getHideThinkingBlock(),
+      hiddenThinkingLabel: this.defaultHiddenThinkingLabel,
+      autoCompactEnabled: this.session.autoCompactionEnabled,
+    });
     this.runtimeHost.setBeforeSessionInvalidate(() => {
       this.resetExtensionUI();
     });
@@ -349,7 +387,6 @@ export class InteractiveMode {
     this.timelineContainer = new Container();
     this.sidebarContainer = new Container();
     this.shellLayout = new ShellLayoutComponent(this.timelineContainer, this.sidebarContainer);
-    this.headerContainer = new Container();
     this.chatContainer = new Container();
     this.pendingMessagesContainer = new Container();
     this.statusContainer = new Container();
@@ -369,9 +406,7 @@ export class InteractiveMode {
     this.footerDataProvider = new FooterDataProvider(this.sessionManager.getCwd());
     this.footer = new FooterComponent(this.session, this.footerDataProvider);
     this.footer.setAutoCompactEnabled(this.session.autoCompactionEnabled);
-
-    // Load hide thinking block setting
-    this.hideThinkingBlock = this.settingsManager.getHideThinkingBlock();
+    this.state.footer.setAutoCompactEnabled(this.session.autoCompactionEnabled);
 
     // Register themes from resource loader and initialize
     setRegisteredThemes(this.session.resourceLoader.getThemes().themes);
@@ -642,7 +677,7 @@ export class InteractiveMode {
         "dim",
         `Teyol can explain its own features and look up its docs. Ask it how to use or extend Teyol.`,
       );
-      this.builtInHeader = new ExpandableText(
+      this.startupContent = new ExpandableText(
         () => `${compactInstructions}\n${compactOnboarding}\n\n${onboarding}`,
         () => `${expandedInstructions}\n\n${onboarding}`,
         this.getStartupExpansionState(),
@@ -650,18 +685,14 @@ export class InteractiveMode {
         0,
       );
 
-      // Setup UI layout
-      this.headerContainer.addChild(new Spacer(1));
-      this.headerContainer.addChild(new LogoComponent(loadAsciiLogo(), versionLine, 0, 1));
-      this.headerContainer.addChild(this.builtInHeader);
-      this.headerContainer.addChild(new Spacer(1));
+      this.chatContainer.addChild(new Spacer(1));
+      this.chatContainer.addChild(new LogoComponent(loadAsciiLogo(), versionLine, 0, 1));
+      this.chatContainer.addChild(this.startupContent);
+      this.chatContainer.addChild(new Spacer(1));
     } else {
-      // Minimal header when silenced
-      this.builtInHeader = new Text("", 0, 0);
-      this.headerContainer.addChild(this.builtInHeader);
+      this.startupContent = undefined;
     }
 
-    this.timelineContainer.addChild(this.headerContainer);
     this.timelineContainer.addChild(this.chatContainer);
     this.timelineContainer.addChild(this.pendingMessagesContainer);
     this.timelineContainer.addChild(this.statusContainer);
@@ -1508,6 +1539,7 @@ export class InteractiveMode {
   private applyRuntimeSettings(): void {
     this.footer.setSession(this.session);
     this.footer.setAutoCompactEnabled(this.session.autoCompactionEnabled);
+    this.state.footer.setAutoCompactEnabled(this.session.autoCompactionEnabled);
     this.footerDataProvider.setCwd(this.sessionManager.getCwd());
     this.hideThinkingBlock = this.settingsManager.getHideThinkingBlock();
     this.ui.setShowHardwareCursor(this.settingsManager.getShowHardwareCursor());
@@ -1615,6 +1647,7 @@ export class InteractiveMode {
    * Set extension status text in the footer.
    */
   private setExtensionStatus(key: string, text: string | undefined): void {
+    this.state.footer.setExtensionStatus({ key, text });
     this.footerDataProvider.setExtensionStatus(key, text);
     this.ui.requestRender();
   }
@@ -1747,6 +1780,7 @@ export class InteractiveMode {
     this.setExtensionFooter(undefined);
     this.setExtensionHeader(undefined);
     this.clearExtensionWidgets();
+    this.state.footer.clearExtensionStatuses();
     this.footerDataProvider.clearExtensionStatuses();
     this.footer.invalidate();
     this.autocompleteProviderWrappers = [];
@@ -1833,46 +1867,10 @@ export class InteractiveMode {
   }
 
   /**
-   * Set a custom header component, or restore the built-in header.
+   * Permanent headers conflict with the V1 shell timeline model: startup and
+   * extension output must scroll with the rest of the timeline.
    */
-  private setExtensionHeader(factory: ((tui: TUI, thm: Theme) => Component & { dispose?(): void }) | undefined): void {
-    // Header may not be initialized yet if called during early initialization
-    if (!this.builtInHeader) {
-      return;
-    }
-
-    // Dispose existing custom header
-    if (this.customHeader?.dispose) {
-      this.customHeader.dispose();
-    }
-
-    // Find the index of the current header in the header container
-    const currentHeader = this.customHeader || this.builtInHeader;
-    const index = this.headerContainer.children.indexOf(currentHeader);
-
-    if (factory) {
-      // Create and add custom header
-      this.customHeader = factory(this.ui, theme);
-      if (isExpandable(this.customHeader)) {
-        this.customHeader.setExpanded(this.toolOutputExpanded);
-      }
-      if (index !== -1) {
-        this.headerContainer.children[index] = this.customHeader;
-      } else {
-        // If not found (e.g. builtInHeader was never added), add at the top
-        this.headerContainer.children.unshift(this.customHeader);
-      }
-    } else {
-      // Restore built-in header
-      this.customHeader = undefined;
-      if (isExpandable(this.builtInHeader)) {
-        this.builtInHeader.setExpanded(this.toolOutputExpanded);
-      }
-      if (index !== -1) {
-        this.headerContainer.children[index] = this.builtInHeader;
-      }
-    }
-
+  private setExtensionHeader(_factory: ((tui: TUI, thm: Theme) => Component & { dispose?(): void }) | undefined): void {
     this.ui.requestRender();
   }
 
@@ -3198,9 +3196,8 @@ export class InteractiveMode {
 
   private setToolsExpanded(expanded: boolean): void {
     this.toolOutputExpanded = expanded;
-    const activeHeader = this.customHeader ?? this.builtInHeader;
-    if (isExpandable(activeHeader)) {
-      activeHeader.setExpanded(expanded);
+    if (isExpandable(this.startupContent)) {
+      this.startupContent.setExpanded(expanded);
     }
     for (const child of this.chatContainer.children) {
       if (isExpandable(child)) {
@@ -3335,16 +3332,10 @@ export class InteractiveMode {
    * Combines session queue and compaction queue.
    */
   private getAllQueuedMessages(): { steering: string[]; followUp: string[] } {
-    return {
-      steering: [
-        ...this.session.getSteeringMessages(),
-        ...this.compactionQueuedMessages.filter((msg) => msg.mode === "steer").map((msg) => msg.text),
-      ],
-      followUp: [
-        ...this.session.getFollowUpMessages(),
-        ...this.compactionQueuedMessages.filter((msg) => msg.mode === "followUp").map((msg) => msg.text),
-      ],
-    };
+    return this.state.queue.getAllQueuedMessages({
+      steering: [...this.session.getSteeringMessages()],
+      followUp: [...this.session.getFollowUpMessages()],
+    });
   }
 
   /**
@@ -3353,17 +3344,7 @@ export class InteractiveMode {
    */
   private clearAllQueues(): { steering: string[]; followUp: string[] } {
     const { steering, followUp } = this.session.clearQueue();
-    const compactionSteering = this.compactionQueuedMessages
-      .filter((msg) => msg.mode === "steer")
-      .map((msg) => msg.text);
-    const compactionFollowUp = this.compactionQueuedMessages
-      .filter((msg) => msg.mode === "followUp")
-      .map((msg) => msg.text);
-    this.compactionQueuedMessages = [];
-    return {
-      steering: [...steering, ...compactionSteering],
-      followUp: [...followUp, ...compactionFollowUp],
-    };
+    return this.state.queue.clearAllQueues({ steering, followUp });
   }
 
   private updatePendingMessagesDisplay(): void {
@@ -3407,7 +3388,7 @@ export class InteractiveMode {
   }
 
   private queueCompactionMessage(text: string, mode: "steer" | "followUp"): void {
-    this.compactionQueuedMessages.push({ text, mode });
+    this.state.queue.queueCompactionMessage({ text, mode });
     this.editor.addToHistory?.(text);
     this.editor.setText("");
     this.updatePendingMessagesDisplay();
@@ -3429,13 +3410,12 @@ export class InteractiveMode {
       return;
     }
 
-    const queuedMessages = [...this.compactionQueuedMessages];
-    this.compactionQueuedMessages = [];
+    const queuedMessages = this.state.queue.takeCompactionQueue();
     this.updatePendingMessagesDisplay();
 
     const restoreQueue = (error: unknown) => {
       this.session.clearQueue();
-      this.compactionQueuedMessages = queuedMessages;
+      this.state.queue.restoreCompactionQueue(queuedMessages);
       this.updatePendingMessagesDisplay();
       this.showError(
         `Failed to send queued message${queuedMessages.length > 1 ? "s" : ""}: ${
@@ -3557,6 +3537,7 @@ export class InteractiveMode {
         {
           onAutoCompactChange: (enabled) => {
             this.session.setAutoCompactionEnabled(enabled);
+            this.state.footer.setAutoCompactEnabled(enabled);
             this.footer.setAutoCompactEnabled(enabled);
           },
           onShowImagesChange: (enabled) => {
@@ -3799,6 +3780,7 @@ export class InteractiveMode {
   private async updateAvailableProviderCount(): Promise<void> {
     const models = await this.getModelCandidates();
     const uniqueProviders = new Set(models.map((m) => m.provider));
+    this.state.footer.setAvailableProviderCount(uniqueProviders.size);
     this.footerDataProvider.setAvailableProviderCount(uniqueProviders.size);
   }
 
@@ -4647,9 +4629,8 @@ export class InteractiveMode {
     try {
       await this.session.reload();
       this.keybindings.reload();
-      const activeHeader = this.customHeader ?? this.builtInHeader;
-      if (isExpandable(activeHeader)) {
-        activeHeader.setExpanded(this.toolOutputExpanded);
+      if (isExpandable(this.startupContent)) {
+        this.startupContent.setExpanded(this.toolOutputExpanded);
       }
       setRegisteredThemes(this.session.resourceLoader.getThemes().themes);
       this.hideThinkingBlock = this.settingsManager.getHideThinkingBlock();
@@ -5316,6 +5297,7 @@ export class InteractiveMode {
     this.clearExtensionTerminalInputListeners();
     this.footer.dispose();
     this.footerDataProvider.dispose();
+    this.state.dispose();
     if (this.unsubscribe) {
       this.unsubscribe();
     }

@@ -19,6 +19,7 @@ import {
 	SIDEBAR_WIDTH,
 } from "../dist/cli/interactive/components/shell-layout.js";
 import { initTheme, theme } from "../dist/cli/interactive/theme/theme.js";
+import { createCliState } from "../dist/cli/state/index.js";
 import { visibleWidth } from "../dist/tui/index.js";
 
 const repoRoot = process.cwd();
@@ -215,6 +216,79 @@ function testShellLayoutUsesTallerSide() {
 	assert.ok(lines[1].includes(`${theme.getFgAnsi("sidebarText")}two`));
 }
 
+function testCliStateQueue() {
+	const state = createCliState({
+		hideThinkingBlock: false,
+		hiddenThinkingLabel: "Thinking...",
+		autoCompactEnabled: true,
+	});
+	try {
+		state.queue.queueCompactionMessage({ text: "interrupt after compact", mode: "steer" });
+		state.queue.queueCompactionMessage({ text: "follow after compact", mode: "followUp" });
+
+		assert.deepEqual(
+			state.queue.getAllQueuedMessages({
+				steering: ["interrupt now"],
+				followUp: ["follow now"],
+			}),
+			{
+				steering: ["interrupt now", "interrupt after compact"],
+				followUp: ["follow now", "follow after compact"],
+			},
+		);
+
+		const taken = state.queue.takeCompactionQueue();
+		assert.deepEqual(taken, [
+			{ text: "interrupt after compact", mode: "steer" },
+			{ text: "follow after compact", mode: "followUp" },
+		]);
+		assert.deepEqual(state.queue.getAllQueuedMessages({ steering: [], followUp: [] }), {
+			steering: [],
+			followUp: [],
+		});
+
+		state.queue.restoreCompactionQueue(taken);
+		assert.deepEqual(state.queue.clearAllQueues({ steering: [], followUp: [] }), {
+			steering: ["interrupt after compact"],
+			followUp: ["follow after compact"],
+		});
+	} finally {
+		state.dispose();
+	}
+}
+
+function testCliStateShellAndFooter() {
+	const state = createCliState({
+		hideThinkingBlock: true,
+		hiddenThinkingLabel: "Thinking...",
+		autoCompactEnabled: false,
+	});
+	try {
+		assert.equal(state.shell.$hideThinkingBlock.getState(), true);
+		state.shell.setToolsExpanded(true);
+		assert.equal(state.shell.$toolOutputExpanded.getState(), true);
+		state.shell.setHiddenThinkingLabel("Reasoning hidden");
+		assert.equal(state.shell.$hiddenThinkingLabel.getState(), "Reasoning hidden");
+		state.shell.setWorkingMessage("Syncing");
+		state.shell.setWorkingVisible(false);
+		assert.deepEqual(state.shell.$working.getState(), {
+			visible: false,
+			message: "Syncing",
+			indicator: undefined,
+		});
+
+		state.footer.setExtensionStatus({ key: "calendar", text: "syncing" });
+		state.footer.setAvailableProviderCount(2);
+		state.footer.setAutoCompactEnabled(true);
+		const footer = state.footer.$snapshot.getState();
+		assert.equal(footer.extensionStatuses.get("calendar"), "syncing");
+		assert.equal(footer.availableProviderCount, 2);
+		assert.equal(footer.autoCompactEnabled, true);
+	} finally {
+		state.dispose();
+	}
+}
+
 await testNoToolsByDefault();
 await testExtensionToolsActiveByDefault();
 await testNoToolsDisablesExtensionTools();
@@ -226,5 +300,7 @@ testUiDescriptorContracts();
 testShellLayoutNarrowWidth();
 testShellLayoutWideWidth();
 testShellLayoutUsesTallerSide();
+testCliStateQueue();
+testCliStateShellAndFooter();
 
 console.log("smoke ok");
