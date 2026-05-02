@@ -1,4 +1,4 @@
-import type { SettingsManager } from "#llm-agent/core/settings-manager.js";
+import type { SettingsManager } from "#shell/runtime/settings-manager.js";
 
 function isTruthyEnvFlag(value: string | undefined): boolean {
 	if (!value) return false;

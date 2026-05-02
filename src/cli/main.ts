@@ -5,27 +5,27 @@
 import { createInterface } from "node:readline";
 import chalk from "chalk";
 import { modelsAreEqual } from "#ai/index.js";
-import { createAgentSessionRuntime } from "#llm-agent/core/agent-session-runtime.js";
+import { createAgentSessionRuntime } from "#shell/runtime/agent-session-runtime.js";
 import { getAgentDir, VERSION } from "../config.js";
 import {
   type AgentSessionRuntimeDiagnostic,
   createAgentSessionFromServices,
   createAgentSessionServices,
-} from "#llm-agent/core/agent-session-services.js";
-import { AuthStorage } from "#llm-agent/core/auth-storage.js";
-import type { ModelRegistry } from "#llm-agent/core/model-registry.js";
-import { resolveCliModel, resolveModelScope, type ScopedModel } from "#llm-agent/core/model-resolver.js";
-import { SessionManager } from "#llm-agent/core/session-manager.js";
-import { SettingsManager } from "#llm-agent/core/settings-manager.js";
-import { type Args, type Mode, parseArgs, printHelp } from "#llm-agent/cli/args.js";
-import { processFileArguments } from "#llm-agent/cli/file-processor.js";
-import { buildInitialMessage } from "#llm-agent/cli/initial-message.js";
-import { initTheme, stopThemeWatcher } from "#llm-agent/modes/interactive/theme/theme.js";
-import { InteractiveMode } from "#llm-agent/modes/interactive/interactive-mode.js";
-import { listModels } from "#llm-agent/cli/list-models.js";
-import { runPrintMode } from "#llm-agent/modes/print-mode.js";
-import { runRpcMode } from "#llm-agent/modes/rpc/rpc-mode.js";
-import { selectSession } from "#llm-agent/cli/session-picker.js";
+} from "#shell/runtime/agent-session-services.js";
+import { AuthStorage } from "#shell/runtime/auth-storage.js";
+import type { ModelRegistry } from "#shell/runtime/model-registry.js";
+import { resolveCliModel, resolveModelScope, type ScopedModel } from "#shell/runtime/model-resolver.js";
+import { SessionManager } from "#shell/runtime/session-manager.js";
+import { SettingsManager } from "#shell/runtime/settings-manager.js";
+import { type Args, type Mode, parseArgs, printHelp } from "#shell/cli/args.js";
+import { processFileArguments } from "#shell/cli/file-processor.js";
+import { buildInitialMessage } from "#shell/cli/initial-message.js";
+import { initTheme, stopThemeWatcher } from "#shell/theme/theme.js";
+import { InteractiveMode } from "#shell/tui/interactive-mode.js";
+import { listModels } from "#shell/cli/list-models.js";
+import { runPrintMode } from "#shell/print/print-mode.js";
+import { runRpcMode } from "#shell/rpc/rpc-mode.js";
+import { selectSession } from "#shell/cli/session-picker.js";
 
 /**
  * Read all content from piped stdin.

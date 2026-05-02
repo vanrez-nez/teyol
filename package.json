@@ -15,8 +15,7 @@
     "#ai/*": "./dist/ai/*",
     "#agent/*": "./dist/agent/*",
     "#tui/*": "./dist/tui/*",
-    "#llm-agent/*": "./dist/llm-agent/*",
-    "#session/*": "./dist/session/*",
+    "#shell/*": "./dist/shell/*",
     "#cli/*": "./dist/cli/*"
   },
   "scripts": {

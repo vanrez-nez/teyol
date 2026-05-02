@@ -4,23 +4,23 @@ import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Type } from "../dist/ai/index.js";
-import { createAgentSession } from "../dist/llm-agent/core/sdk.js";
-import { AuthStorage } from "../dist/llm-agent/core/auth-storage.js";
-import { ModelRegistry } from "../dist/llm-agent/core/model-registry.js";
-import { DefaultResourceLoader } from "../dist/llm-agent/core/resource-loader.js";
-import { SessionManager } from "../dist/llm-agent/core/session-manager.js";
-import { SettingsManager } from "../dist/llm-agent/core/settings-manager.js";
-import { buildSystemPrompt } from "../dist/llm-agent/core/system-prompt.js";
-import { loadExtensions } from "../dist/llm-agent/core/extensions/loader.js";
-import { validateUiDescriptorFixtures } from "../dist/session/ui-descriptors.fixtures.js";
+import { createAgentSession } from "../dist/shell/runtime/sdk.js";
+import { AuthStorage } from "../dist/shell/runtime/auth-storage.js";
+import { ModelRegistry } from "../dist/shell/runtime/model-registry.js";
+import { DefaultResourceLoader } from "../dist/shell/runtime/resource-loader.js";
+import { SessionManager } from "../dist/shell/runtime/session-manager.js";
+import { SettingsManager } from "../dist/shell/runtime/settings-manager.js";
+import { buildSystemPrompt } from "../dist/shell/runtime/system-prompt.js";
+import { loadExtensions } from "../dist/shell/runtime/extensions/loader.js";
+import { validateUiDescriptorFixtures } from "../dist/shell/descriptors/ui-descriptors.fixtures.js";
 import {
 	ShellLayoutComponent,
 	SIDEBAR_MIN_TERMINAL_WIDTH,
 	SIDEBAR_SEPARATOR,
 	SIDEBAR_WIDTH,
-} from "../dist/llm-agent/modes/interactive/components/shell-layout.js";
-import { initTheme, theme } from "../dist/llm-agent/modes/interactive/theme/theme.js";
-import { createCliState } from "../dist/llm-agent/modes/interactive/state/index.js";
+} from "../dist/shell/tui/components/shell-layout.js";
+import { initTheme, theme } from "../dist/shell/theme/theme.js";
+import { createCliState } from "../dist/shell/tui/state/index.js";
 import { visibleWidth } from "../dist/tui/index.js";
 
 const repoRoot = process.cwd();
