@@ -36,7 +36,6 @@ import {
   type LoaderIndicatorOptions,
   Markdown,
   matchesKey,
-  ProcessTerminal,
   Spacer,
   setKeybindings,
   Text,
@@ -73,7 +72,7 @@ import type {
   ExtensionWidgetOptions,
 } from "#shell/runtime/extensions/index.js";
 import { type AgentSession, type AgentSessionEvent, parseSkillBlock } from "#shell/runtime/agent-session.js";
-import { FooterDataProvider, type ReadonlyFooterDataProvider } from "#shell/runtime/footer-data-provider.js";
+import type { ReadonlyFooterDataProvider } from "#shell/runtime/footer-data-provider.js";
 import { type AppKeybinding, KeybindingsManager } from "#shell/runtime/keybindings.js";
 import { createCompactionSummaryMessage } from "#shell/runtime/messages.js";
 import { defaultModelPerProvider, findExactModelReferenceMatch, resolveModelScope } from "#shell/runtime/model-resolver.js";
@@ -99,7 +98,6 @@ import { DynamicBorder } from "./components/dynamic-border.js";
 import { ExtensionEditorComponent } from "./components/extension-editor.js";
 import { ExtensionInputComponent } from "./components/extension-input.js";
 import { ExtensionSelectorComponent } from "./components/extension-selector.js";
-import { FooterComponent } from "./components/footer.js";
 import { keyHint, keyText, rawKeyHint } from "./components/keybinding-hints.js";
 import { loadAsciiLogo, LogoComponent } from "./logo.js";
 import { LoginDialogComponent } from "./components/login-dialog.js";
@@ -113,7 +111,6 @@ import { ScopedModelsSelectorComponent } from "./components/scoped-models-select
 import { type SessionAction, SessionActionsSelectorComponent } from "./components/session-actions-selector.js";
 import { SessionSelectorComponent } from "./components/session-selector.js";
 import { SettingsSelectorComponent } from "./components/settings-selector.js";
-import { ShellLayoutComponent } from "./components/shell-layout.js";
 import { SkillInvocationMessageComponent } from "./components/skill-invocation-message.js";
 import { ToolExecutionComponent } from "./components/tool-execution.js";
 import { TreeSelectorComponent } from "./components/tree-selector.js";
@@ -140,6 +137,7 @@ import { dispatchBuiltInCommand } from "./commands/built-in.js";
 import { buildAutocomplete, getBuiltInCommandConflictDiagnostics } from "./commands/autocomplete.js";
 import { setupBuiltInHotkeys } from "./hotkeys/built-in.js";
 import { buildHotkeyHelpMarkdown } from "./hotkeys/help.js";
+import { ShellComposition } from "./layout/composition.js";
 
 /** Interface for components that can be expanded/collapsed */
 interface Expandable {
@@ -211,10 +209,8 @@ export interface InteractiveModeOptions {
 export class InteractiveMode {
   private runtimeHost: AgentSessionRuntime;
   private state: CliState;
+  private composition: ShellComposition;
   private ui: TUI;
-  private shellLayout: ShellLayoutComponent;
-  private timelineContainer: Container;
-  private sidebarContainer: Container;
   private chatContainer: Container;
   private pendingMessagesContainer: Container;
   private statusContainer: Container;
@@ -224,9 +220,8 @@ export class InteractiveMode {
   private autocompleteProvider: AutocompleteProvider | undefined;
   private autocompleteProviderWrappers: AutocompleteProviderFactory[] = [];
   private fdPath: string | undefined;
-  private editorContainer: Container;
-  private footer: FooterComponent;
-  private footerDataProvider: FooterDataProvider;
+  private footer: ShellComposition["footer"];
+  private footerDataProvider: ShellComposition["footerDataProvider"];
   // Stored so the same manager can be injected into custom editors, selectors, and extension UI.
   private keybindings: KeybindingsManager;
   private version: string;
@@ -377,16 +372,20 @@ export class InteractiveMode {
       await this.rebindCurrentSession();
     });
     this.version = VERSION;
-    this.ui = new TUI(new ProcessTerminal(), this.settingsManager.getShowHardwareCursor());
-    this.ui.setClearOnShrink(this.settingsManager.getClearOnShrink());
-    this.timelineContainer = new Container();
-    this.sidebarContainer = new Container();
-    this.shellLayout = new ShellLayoutComponent(this.timelineContainer, this.sidebarContainer);
-    this.chatContainer = new Container();
-    this.pendingMessagesContainer = new Container();
-    this.statusContainer = new Container();
-    this.widgetContainerAbove = new Container();
-    this.widgetContainerBelow = new Container();
+    this.composition = new ShellComposition({
+      session: this.session,
+      cwd: this.sessionManager.getCwd(),
+      showHardwareCursor: this.settingsManager.getShowHardwareCursor(),
+      clearOnShrink: this.settingsManager.getClearOnShrink(),
+    });
+    this.ui = this.composition.ui;
+    this.chatContainer = this.composition.chat;
+    this.pendingMessagesContainer = this.composition.pendingMessages;
+    this.statusContainer = this.composition.status;
+    this.widgetContainerAbove = this.composition.widgetsAbove;
+    this.widgetContainerBelow = this.composition.widgetsBelow;
+    this.footerDataProvider = this.composition.footerDataProvider;
+    this.footer = this.composition.footer;
     this.keybindings = KeybindingsManager.create();
     setKeybindings(this.keybindings);
     const editorPaddingX = this.settingsManager.getEditorPaddingX();
@@ -396,10 +395,7 @@ export class InteractiveMode {
       autocompleteMaxVisible,
     });
     this.editor = this.defaultEditor;
-    this.editorContainer = new Container();
-    this.editorContainer.addChild(this.editor as Component);
-    this.footerDataProvider = new FooterDataProvider(this.sessionManager.getCwd());
-    this.footer = new FooterComponent(this.session, this.footerDataProvider);
+    this.composition.restoreEditorHost(this.editor as Component);
     this.footer.setAutoCompactEnabled(this.session.autoCompactionEnabled);
     this.state.footer.setAutoCompactEnabled(this.session.autoCompactionEnabled);
 
@@ -534,15 +530,8 @@ export class InteractiveMode {
       this.startupContent = undefined;
     }
 
-    this.timelineContainer.addChild(this.chatContainer);
-    this.timelineContainer.addChild(this.pendingMessagesContainer);
-    this.timelineContainer.addChild(this.statusContainer);
     this.renderWidgets(); // Initialize with default spacer
-    this.timelineContainer.addChild(this.widgetContainerAbove);
-    this.timelineContainer.addChild(this.editorContainer);
-    this.timelineContainer.addChild(this.widgetContainerBelow);
-    this.ui.addChild(this.shellLayout);
-    this.ui.addChild(this.footer);
+    this.composition.attachRoot();
     this.ui.setFocus(this.editor);
 
     this.setupKeyHandlers();
@@ -1829,10 +1818,7 @@ export class InteractiveMode {
         { tui: this.ui, timeout: opts?.timeout },
       );
 
-      this.editorContainer.clear();
-      this.editorContainer.addChild(this.extensionSelector);
-      this.ui.setFocus(this.extensionSelector);
-      this.ui.requestRender();
+      this.composition.setEditorHost(this.extensionSelector);
     });
   }
 
@@ -1841,11 +1827,8 @@ export class InteractiveMode {
    */
   private hideExtensionSelector(): void {
     this.extensionSelector?.dispose();
-    this.editorContainer.clear();
-    this.editorContainer.addChild(this.editor);
     this.extensionSelector = undefined;
-    this.ui.setFocus(this.editor);
-    this.ui.requestRender();
+    this.composition.restoreEditorHost(this.editor);
   }
 
   /**
@@ -1904,10 +1887,7 @@ export class InteractiveMode {
         { tui: this.ui, timeout: opts?.timeout },
       );
 
-      this.editorContainer.clear();
-      this.editorContainer.addChild(this.extensionInput);
-      this.ui.setFocus(this.extensionInput);
-      this.ui.requestRender();
+      this.composition.setEditorHost(this.extensionInput);
     });
   }
 
@@ -1916,11 +1896,8 @@ export class InteractiveMode {
    */
   private hideExtensionInput(): void {
     this.extensionInput?.dispose();
-    this.editorContainer.clear();
-    this.editorContainer.addChild(this.editor);
     this.extensionInput = undefined;
-    this.ui.setFocus(this.editor);
-    this.ui.requestRender();
+    this.composition.restoreEditorHost(this.editor);
   }
 
   /**
@@ -1943,10 +1920,7 @@ export class InteractiveMode {
         },
       );
 
-      this.editorContainer.clear();
-      this.editorContainer.addChild(this.extensionEditor);
-      this.ui.setFocus(this.extensionEditor);
-      this.ui.requestRender();
+      this.composition.setEditorHost(this.extensionEditor);
     });
   }
 
@@ -1954,11 +1928,8 @@ export class InteractiveMode {
    * Hide the extension editor.
    */
   private hideExtensionEditor(): void {
-    this.editorContainer.clear();
-    this.editorContainer.addChild(this.editor);
     this.extensionEditor = undefined;
-    this.ui.setFocus(this.editor);
-    this.ui.requestRender();
+    this.composition.restoreEditorHost(this.editor);
   }
 
   /**
@@ -1970,8 +1941,6 @@ export class InteractiveMode {
 
     // Save text from current editor before switching
     const currentText = this.editor.getText();
-
-    this.editorContainer.clear();
 
     if (factory) {
       // Create the custom editor with tui, theme, and keybindings
@@ -2026,9 +1995,7 @@ export class InteractiveMode {
       this.editor = this.defaultEditor;
     }
 
-    this.editorContainer.addChild(this.editor as Component);
-    this.ui.setFocus(this.editor as Component);
-    this.ui.requestRender();
+    this.composition.restoreEditorHost(this.editor as Component);
   }
 
   /**
@@ -2062,11 +2029,8 @@ export class InteractiveMode {
     const isOverlay = options?.overlay ?? false;
 
     const restoreEditor = () => {
-      this.editorContainer.clear();
-      this.editorContainer.addChild(this.editor);
       this.editor.setText(savedText);
-      this.ui.setFocus(this.editor);
-      this.ui.requestRender();
+      this.composition.restoreEditorHost(this.editor);
     };
 
     return new Promise((resolve, reject) => {
@@ -2107,10 +2071,7 @@ export class InteractiveMode {
             // Expose handle to caller for visibility control
             options?.onHandle?.(handle);
           } else {
-            this.editorContainer.clear();
-            this.editorContainer.addChild(component);
-            this.ui.setFocus(component);
-            this.ui.requestRender();
+            this.composition.setEditorHost(component);
           }
         })
         .catch((err) => {
@@ -3282,15 +3243,10 @@ export class InteractiveMode {
    */
   private showSelector(create: (done: () => void) => { component: Component; focus: Component }): void {
     const done = () => {
-      this.editorContainer.clear();
-      this.editorContainer.addChild(this.editor);
-      this.ui.setFocus(this.editor);
+      this.composition.restoreEditorHost(this.editor);
     };
     const { component, focus } = create(done);
-    this.editorContainer.clear();
-    this.editorContainer.addChild(component);
-    this.ui.setFocus(focus);
-    this.ui.requestRender();
+    this.composition.setEditorHost(component, focus);
   }
 
   private showSettingsSelector(): void {
@@ -4186,16 +4142,10 @@ export class InteractiveMode {
       providerName,
     );
 
-    this.editorContainer.clear();
-    this.editorContainer.addChild(dialog);
-    this.ui.setFocus(dialog);
-    this.ui.requestRender();
+    this.composition.setEditorHost(dialog);
 
     const restoreEditor = () => {
-      this.editorContainer.clear();
-      this.editorContainer.addChild(this.editor);
-      this.ui.setFocus(this.editor);
-      this.ui.requestRender();
+      this.composition.restoreEditorHost(this.editor);
     };
 
     try {
@@ -4234,16 +4184,10 @@ export class InteractiveMode {
       `Configure self-hosted ${providerName}`,
     );
 
-    this.editorContainer.clear();
-    this.editorContainer.addChild(dialog);
-    this.ui.setFocus(dialog);
-    this.ui.requestRender();
+    this.composition.setEditorHost(dialog);
 
     const restoreEditor = () => {
-      this.editorContainer.clear();
-      this.editorContainer.addChild(this.editor);
-      this.ui.setFocus(this.editor);
-      this.ui.requestRender();
+      this.composition.restoreEditorHost(this.editor);
     };
 
     try {
@@ -4303,10 +4247,7 @@ export class InteractiveMode {
     );
 
     // Show dialog in editor container
-    this.editorContainer.clear();
-    this.editorContainer.addChild(dialog);
-    this.ui.setFocus(dialog);
-    this.ui.requestRender();
+    this.composition.setEditorHost(dialog);
 
     // Promise for manual code input (racing with callback server)
     let manualCodeResolve: ((code: string) => void) | undefined;
@@ -4318,10 +4259,7 @@ export class InteractiveMode {
 
     // Restore editor helper
     const restoreEditor = () => {
-      this.editorContainer.clear();
-      this.editorContainer.addChild(this.editor);
-      this.ui.setFocus(this.editor);
-      this.ui.requestRender();
+      this.composition.restoreEditorHost(this.editor);
     };
 
     try {
@@ -4400,17 +4338,12 @@ export class InteractiveMode {
     reloadBox.addChild(new DynamicBorder(borderColor));
 
     const previousEditor = this.editor;
-    this.editorContainer.clear();
-    this.editorContainer.addChild(reloadBox);
-    this.ui.setFocus(reloadBox);
+    this.composition.setEditorHost(reloadBox);
     this.ui.requestRender(true);
     await new Promise((resolve) => process.nextTick(resolve));
 
     const dismissReloadBox = (editor: Component) => {
-      this.editorContainer.clear();
-      this.editorContainer.addChild(editor);
-      this.ui.setFocus(editor);
-      this.ui.requestRender();
+      this.composition.restoreEditorHost(editor);
     };
 
     getLogger().info("reload.start");
@@ -4490,15 +4423,10 @@ export class InteractiveMode {
       (text) => theme.fg("muted", text),
       "Creating gist...",
     );
-    this.editorContainer.clear();
-    this.editorContainer.addChild(loader);
-    this.ui.setFocus(loader);
-    this.ui.requestRender();
+    this.composition.setEditorHost(loader);
 
     const restoreEditor = () => {
-      this.editorContainer.clear();
-      this.editorContainer.addChild(this.editor);
-      this.ui.setFocus(this.editor);
+      this.composition.restoreEditorHost(this.editor);
       try {
         fs.unlinkSync(tmpFile);
       } catch {
@@ -4956,8 +4884,7 @@ export class InteractiveMode {
       this.loadingAnimation = undefined;
     }
     this.clearExtensionTerminalInputListeners();
-    this.footer.dispose();
-    this.footerDataProvider.dispose();
+    this.composition.dispose();
     this.state.dispose();
     if (this.unsubscribe) {
       this.unsubscribe();

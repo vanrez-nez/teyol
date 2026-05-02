@@ -19,6 +19,7 @@ import {
 	SIDEBAR_SEPARATOR,
 	SIDEBAR_WIDTH,
 } from "../dist/shell/tui/components/shell-layout.js";
+import { ShellComposition } from "../dist/shell/tui/layout/composition.js";
 import { initTheme, theme } from "../dist/shell/theme/theme.js";
 import { createCliState } from "../dist/shell/tui/state/index.js";
 import { dispatchBuiltInCommand } from "../dist/shell/tui/commands/built-in.js";
@@ -323,6 +324,56 @@ function testShellLayoutUsesTallerSide() {
 	assert.ok(lines[1].includes(`${theme.getFgAnsi("sidebarText")}two`));
 }
 
+function testShellCompositionBuildsStaticRegions() {
+	const editor = staticComponent(["editor"]);
+	const replacement = staticComponent(["replacement"]);
+	const session = {
+		state: { model: undefined },
+		sessionManager: {
+			getEntries: () => [],
+			getCwd: () => repoRoot,
+			getSessionName: () => undefined,
+		},
+		getContextUsage: () => undefined,
+		modelRegistry: {
+			isUsingOAuth: () => false,
+		},
+	};
+	const composition = new ShellComposition({
+		session,
+		cwd: repoRoot,
+		showHardwareCursor: false,
+		clearOnShrink: false,
+		editor,
+	});
+	composition.ui.requestRender = () => {};
+
+	try {
+		composition.attachRoot();
+		composition.sidebar.addChild(staticComponent(["sidebar"]));
+
+		assert.equal(composition.ui.children[0], composition.layout);
+		assert.equal(composition.ui.children[1], composition.footer);
+		assert.deepEqual(composition.timeline.children, [
+			composition.chat,
+			composition.pendingMessages,
+			composition.status,
+			composition.widgetsAbove,
+			composition.editorHost,
+			composition.widgetsBelow,
+		]);
+		assert.deepEqual(composition.editorHost.children, [editor]);
+		assert.deepEqual(composition.layout.render(SIDEBAR_MIN_TERMINAL_WIDTH - 1), ["editor"]);
+
+		composition.setEditorHost(replacement);
+		assert.deepEqual(composition.editorHost.children, [replacement]);
+		composition.restoreEditorHost(editor);
+		assert.deepEqual(composition.editorHost.children, [editor]);
+	} finally {
+		composition.dispose();
+	}
+}
+
 function testCliStateQueue() {
 	const state = createCliState({
 		hideThinkingBlock: false,
@@ -411,6 +462,7 @@ testUiDescriptorContracts();
 testShellLayoutNarrowWidth();
 testShellLayoutWideWidth();
 testShellLayoutUsesTallerSide();
+testShellCompositionBuildsStaticRegions();
 testCliStateQueue();
 testCliStateShellAndFooter();
 
