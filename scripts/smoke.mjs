@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdtempSync } from "node:fs";
+import { mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { Type } from "../dist/ai/index.js";
@@ -11,6 +11,7 @@ import { DefaultResourceLoader } from "../dist/llm-agent/core/resource-loader.js
 import { SessionManager } from "../dist/llm-agent/core/session-manager.js";
 import { SettingsManager } from "../dist/llm-agent/core/settings-manager.js";
 import { buildSystemPrompt } from "../dist/llm-agent/core/system-prompt.js";
+import { loadExtensions } from "../dist/llm-agent/core/extensions/loader.js";
 import { validateUiDescriptorFixtures } from "../dist/session/ui-descriptors.fixtures.js";
 import {
 	ShellLayoutComponent,
@@ -122,6 +123,35 @@ async function testToolAllowlist() {
 	} finally {
 		session.dispose();
 	}
+}
+
+async function testExtensionModuleCanImportTeyol() {
+	const root = mkdtempSync(join(tmpdir(), "teyol-extension-alias-"));
+	const extensionPath = join(root, "index.ts");
+	writeFileSync(
+		extensionPath,
+		`
+import { Type } from "@teyol";
+
+export default function extension(teyol) {
+\tteyol.registerTool({
+\t\tname: "alias_test",
+\t\tlabel: "Alias Test",
+\t\tdescription: "Verifies @teyol resolves for extension modules.",
+\t\tparameters: Type.Object({}),
+\t\tasync execute() {
+\t\t\treturn { content: [{ type: "text", text: "ok" }] };
+\t\t},
+\t});
+}
+`,
+		"utf8",
+	);
+
+	const result = await loadExtensions([extensionPath], root);
+	assert.deepEqual(result.errors, []);
+	assert.equal(result.extensions.length, 1);
+	assert.deepEqual(Array.from(result.extensions[0].tools.keys()), ["alias_test"]);
 }
 
 function testSystemPrompt() {
@@ -293,6 +323,7 @@ await testNoToolsByDefault();
 await testExtensionToolsActiveByDefault();
 await testNoToolsDisablesExtensionTools();
 await testToolAllowlist();
+await testExtensionModuleCanImportTeyol();
 testSystemPrompt();
 testCliHelp();
 testUnknownFlagDiagnostics();

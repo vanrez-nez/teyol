@@ -59,7 +59,7 @@ function getAliases(): Record<string, string> {
 	if (_aliases) return _aliases;
 
 	const __dirname = path.dirname(fileURLToPath(import.meta.url));
-	const packageIndex = path.resolve(__dirname, "..", "index.js");
+	const packageIndex = path.resolve(__dirname, "../../..", "index.js");
 
 	const typeboxEntry = require.resolve("@sinclair/typebox");
 	const typeboxCompileEntry = require.resolve("@sinclair/typebox/compiler");
