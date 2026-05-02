@@ -10,7 +10,7 @@ import type {
   ChatCompletionSystemMessageParam,
   ChatCompletionToolMessageParam,
 } from "openai/resources/chat/completions.js";
-import { getLogger } from "../../session/logger.js";
+import { getLogger } from "#llm-agent/core/logger.js";
 import { getEnvApiKey } from "../env-api-keys.js";
 import { calculateCost, supportsXhigh } from "../models.js";
 import type {

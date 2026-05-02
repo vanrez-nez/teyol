@@ -11,7 +11,7 @@ import {
 	type ToolResultMessage,
 	validateToolArguments,
 } from "../ai/index.js";
-import { getLogger } from "../session/logger.js";
+import { getLogger } from "#llm-agent/core/logger.js";
 import type {
 	AgentContext,
 	AgentEvent,

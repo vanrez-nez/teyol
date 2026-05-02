@@ -5,27 +5,27 @@
 import { createInterface } from "node:readline";
 import chalk from "chalk";
 import { modelsAreEqual } from "#ai/index.js";
-import { createAgentSessionRuntime } from "../agent/agent-session-runtime.js";
+import { createAgentSessionRuntime } from "#llm-agent/core/agent-session-runtime.js";
 import { getAgentDir, VERSION } from "../config.js";
 import {
   type AgentSessionRuntimeDiagnostic,
   createAgentSessionFromServices,
   createAgentSessionServices,
-} from "../session/agent-session-services.js";
-import { AuthStorage } from "../session/auth-storage.js";
-import type { ModelRegistry } from "../session/model-registry.js";
-import { resolveCliModel, resolveModelScope, type ScopedModel } from "../session/model-resolver.js";
-import { SessionManager } from "../session/session-manager.js";
-import { SettingsManager } from "../session/settings-manager.js";
-import { type Args, type Mode, parseArgs, printHelp } from "./args.js";
-import { processFileArguments } from "./file-processor.js";
-import { buildInitialMessage } from "./initial-message.js";
-import { initTheme, stopThemeWatcher } from "./interactive/theme/theme.js";
-import { InteractiveMode } from "./interactive-mode.js";
-import { listModels } from "./list-models.js";
-import { runPrintMode } from "./print-mode.js";
-import { runRpcMode } from "./rpc/rpc-mode.js";
-import { selectSession } from "./session-picker.js";
+} from "#llm-agent/core/agent-session-services.js";
+import { AuthStorage } from "#llm-agent/core/auth-storage.js";
+import type { ModelRegistry } from "#llm-agent/core/model-registry.js";
+import { resolveCliModel, resolveModelScope, type ScopedModel } from "#llm-agent/core/model-resolver.js";
+import { SessionManager } from "#llm-agent/core/session-manager.js";
+import { SettingsManager } from "#llm-agent/core/settings-manager.js";
+import { type Args, type Mode, parseArgs, printHelp } from "#llm-agent/cli/args.js";
+import { processFileArguments } from "#llm-agent/cli/file-processor.js";
+import { buildInitialMessage } from "#llm-agent/cli/initial-message.js";
+import { initTheme, stopThemeWatcher } from "#llm-agent/modes/interactive/theme/theme.js";
+import { InteractiveMode } from "#llm-agent/modes/interactive/interactive-mode.js";
+import { listModels } from "#llm-agent/cli/list-models.js";
+import { runPrintMode } from "#llm-agent/modes/print-mode.js";
+import { runRpcMode } from "#llm-agent/modes/rpc/rpc-mode.js";
+import { selectSession } from "#llm-agent/cli/session-picker.js";
 
 /**
  * Read all content from piped stdin.

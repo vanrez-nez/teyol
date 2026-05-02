@@ -1,7 +1,7 @@
 import "./providers/register-builtins.js";
 
 import { getApiProvider } from "./api-registry.js";
-import { getLogger } from "../session/logger.js";
+import { getLogger } from "#llm-agent/core/logger.js";
 import type {
 	Api,
 	AssistantMessage,

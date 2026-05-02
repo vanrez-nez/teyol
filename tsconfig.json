@@ -20,8 +20,8 @@
       "#ai/*": ["./src/ai/*"],
       "#agent/*": ["./src/agent/*"],
       "#tui/*": ["./src/tui/*"],
+      "#llm-agent/*": ["./src/llm-agent/*"],
       "#session/*": ["src/session/*"],
-      "#extensions/*": ["src/extensions/*"],
       "#cli/*": ["src/cli/*"]
     }
   },
