@@ -18,10 +18,7 @@ import type {
   AutocompleteItem,
   AutocompleteProvider,
   EditorComponent,
-  KeyId,
   MarkdownTheme,
-  OverlayHandle,
-  OverlayOptions,
 } from "#tui/index.js";
 import {
   type Component,
@@ -29,7 +26,6 @@ import {
   Loader,
   type LoaderIndicatorOptions,
   Markdown,
-  matchesKey,
   Spacer,
   setKeybindings,
   Text,
@@ -49,21 +45,13 @@ import {
 } from "../../config.js";
 import { getLogger } from "#shell/runtime/logger.js";
 import type {
-  AutocompleteProviderFactory,
-  EditorFactory,
   ExtensionCommandContext,
-  ExtensionContext,
-  ExtensionRunner,
-  ExtensionUIContext,
-  ExtensionUIDialogOptions,
-  ExtensionWidgetOptions,
+  ExtensionCommandContextActions,
 } from "#shell/runtime/extensions/index.js";
 import { type AgentSessionEvent, parseSkillBlock } from "#shell/runtime/agent-session.js";
-import type { ReadonlyFooterDataProvider } from "#shell/runtime/footer-data-provider.js";
 import { type AppKeybinding, KeybindingsManager } from "#shell/runtime/keybindings.js";
 import { createCompactionSummaryMessage } from "#shell/runtime/messages.js";
 import { DefaultPackageManager } from "#shell/runtime/package-manager.js";
-import type { ResourceDiagnostic } from "#shell/runtime/resource-loader.js";
 import {
   formatMissingSessionCwdPrompt,
   MissingSessionCwdError,
@@ -79,9 +67,6 @@ import { CountdownTimer } from "./components/countdown-timer.js";
 import { CustomEditor } from "./components/custom-editor.js";
 import { CustomMessageComponent } from "./components/custom-message.js";
 import { DynamicBorder } from "./components/dynamic-border.js";
-import { ExtensionEditorComponent } from "./components/extension-editor.js";
-import { ExtensionInputComponent } from "./components/extension-input.js";
-import { ExtensionSelectorComponent } from "./components/extension-selector.js";
 import { keyHint, keyText, rawKeyHint } from "./components/keybinding-hints.js";
 import { loadAsciiLogo, LogoComponent } from "./logo.js";
 import { SkillInvocationMessageComponent } from "./components/skill-invocation-message.js";
@@ -89,18 +74,13 @@ import { ToolExecutionComponent } from "./components/tool-execution.js";
 import { UserMessageComponent } from "./components/user-message.js";
 import { createCliState, type CliState, type QueuedMessage } from "./state/index.js";
 import {
-  getAvailableThemesWithPaths,
   getEditorTheme,
   getMarkdownTheme,
-  getThemeByName,
   initTheme,
   onThemeChange,
   setRegisteredThemes,
   setTheme,
-  setThemeInstance,
   stopThemeWatcher,
-  Theme,
-  type ThemeColor,
   theme,
 } from "../theme/theme.js";
 import { dispatchBuiltInCommand } from "./commands/built-in.js";
@@ -134,22 +114,14 @@ import {
 import { settingsCommand } from "./commands/built-ins/settings.js";
 import { type RegisteredCommand, registerCommand } from "./commands/types.js";
 import {
-  buildScopeGroups,
   formatAppKeyDisplay,
-  formatContextPath,
-  formatDiagnostics,
-  formatDisplayPath,
-  formatExtensionDisplayPath,
-  formatScopeGroups,
-  getCompactExtensionLabels,
-  getCompactPathLabel,
-  getShortPath,
   getUserMessageText,
 } from "./display-helpers.js";
+import { InteractiveExtensions } from "./extensions/interactive-extensions.js";
+import { showLoadedResources } from "./extensions/loaded-resources.js";
 import { setupBuiltInHotkeys } from "./hotkeys/built-in.js";
 import { ShellComposition } from "./layout/composition.js";
 
-/** Interface for components that can be expanded/collapsed */
 interface Expandable {
   setExpanded(expanded: boolean): void;
 }
@@ -202,9 +174,8 @@ export class InteractiveMode {
   private statusContainer: Container;
   private defaultEditor: CustomEditor;
   private editor: EditorComponent;
-  private editorComponentFactory: EditorFactory | undefined;
   private autocompleteProvider: AutocompleteProvider | undefined;
-  private autocompleteProviderWrappers: AutocompleteProviderFactory[] = [];
+  private interactiveExtensions: InteractiveExtensions;
   private fdPath: string | undefined;
   private footer: ShellComposition["footer"];
   private footerDataProvider: ShellComposition["footerDataProvider"];
@@ -253,20 +224,8 @@ export class InteractiveMode {
 
   private shutdownRequested = false;
 
-  // Extension UI state
-  private extensionSelector: ExtensionSelectorComponent | undefined = undefined;
-  private extensionInput: ExtensionInputComponent | undefined = undefined;
-  private extensionEditor: ExtensionEditorComponent | undefined = undefined;
-  private extensionTerminalInputUnsubscribers = new Set<() => void>();
-
-  // Extension widgets (components rendered above/below the editor)
-  private extensionWidgetsAbove = new Map<string, Component & { dispose?(): void }>();
-  private extensionWidgetsBelow = new Map<string, Component & { dispose?(): void }>();
   private widgetContainerAbove!: Container;
   private widgetContainerBelow!: Container;
-
-  // Custom footer from extension (undefined = use built-in footer)
-  private customFooter: (Component & { dispose?(): void }) | undefined = undefined;
 
   // Built-in startup content rendered into the scrollable timeline.
   private startupContent: Component | undefined = undefined;
@@ -288,9 +247,6 @@ export class InteractiveMode {
       hideThinkingBlock: this.runtimeHost.session.settingsManager.getHideThinkingBlock(),
       hiddenThinkingLabel: this.defaultHiddenThinkingLabel,
       autoCompactEnabled: this.runtimeHost.session.autoCompactionEnabled,
-    });
-    this.runtimeHost.setBeforeSessionInvalidate(() => {
-      this.resetExtensionUI();
     });
     this.runtimeHost.setRebindSession(async () => {
       await this.rebindCurrentSession();
@@ -322,6 +278,48 @@ export class InteractiveMode {
     this.composition.restoreEditorHost(this.editor as Component);
     this.footer.setAutoCompactEnabled(this.runtimeHost.session.autoCompactionEnabled);
     this.state.footer.setAutoCompactEnabled(this.runtimeHost.session.autoCompactionEnabled);
+    this.interactiveExtensions = new InteractiveExtensions({
+      ui: this.ui,
+      composition: this.composition,
+      state: this.state,
+      chatContainer: this.chatContainer,
+      widgetContainerAbove: this.widgetContainerAbove,
+      widgetContainerBelow: this.widgetContainerBelow,
+      footer: this.footer,
+      footerDataProvider: this.footerDataProvider,
+      defaultEditor: this.defaultEditor,
+      keybindings: this.keybindings,
+      getSession: () => this.runtimeHost.session,
+      getEditor: () => this.editor,
+      setEditor: (editor) => {
+        this.editor = editor;
+      },
+      getAutocompleteProvider: () => this.autocompleteProvider,
+      setupAutocompleteProvider: () => this.setupAutocompleteProvider(),
+      updateTerminalTitle: () => this.updateTerminalTitle(),
+      showStatus: (message) => this.showStatus(message),
+      showWarning: (message) => this.showWarning(message),
+      showError: (message) => this.showError(message),
+      setShutdownRequested: (requested) => {
+        this.shutdownRequested = requested;
+      },
+      shutdown: () => this.shutdown(),
+      setWorkingMessage: (message) => this.setWorkingMessage(message),
+      setWorkingVisible: (visible) => this.setWorkingVisible(visible),
+      setWorkingIndicator: (options) => this.setWorkingIndicator(options),
+      setHiddenThinkingLabel: (label) => this.setHiddenThinkingLabel(label),
+      setToolsExpanded: (expanded) => this.setToolsExpanded(expanded),
+      getToolsExpanded: () => this.state.shell.$toolOutputExpanded.getState(),
+      pasteToEditor: (text) => this.editor.handleInput(`\x1b[200~${text}\x1b[201~`),
+      setEditorText: (text) => this.editor.setText(text),
+      getEditorText: () => this.editor.getExpandedText?.() ?? this.editor.getText(),
+      bindCommandContextActions: () => this.createExtensionCommandContextActions(),
+      showLoadedResources: () => this.showLoadedResources({ force: false, showDiagnosticsWhenQuiet: true }),
+      showStartupNoticesIfNeeded: () => this.showStartupNoticesIfNeeded(),
+    });
+    this.runtimeHost.setBeforeSessionInvalidate(() => {
+      this.interactiveExtensions.reset();
+    });
 
     // Register themes from resource loader and initialize
     setRegisteredThemes(this.runtimeHost.session.resourceLoader.getThemes().themes);
@@ -339,7 +337,7 @@ export class InteractiveMode {
       commands: this.getBuiltInCommands(),
     });
     let provider = result.provider;
-    for (const wrapProvider of this.autocompleteProviderWrappers) {
+    for (const wrapProvider of this.interactiveExtensions.getAutocompleteWrappers()) {
       provider = wrapProvider(provider);
     }
 
@@ -447,8 +445,8 @@ export class InteractiveMode {
       stopLoadingAnimation: () => this.stopLoadingAnimation(),
       renderCurrentSessionState: () => this.renderCurrentSessionState(),
       renderInitialMessages: () => this.renderInitialMessages(),
-      showExtensionSelector: (title, options) => this.showExtensionSelector(title, options),
-      showExtensionEditor: (title, prefill) => this.showExtensionEditor(title, prefill),
+      showExtensionSelector: (title, options) => this.interactiveExtensions.showSelector(title, options),
+      showExtensionEditor: (title, prefill) => this.interactiveExtensions.showEditor(title, prefill),
       promptForMissingSessionCwd: (error) => this.promptForMissingSessionCwd(error),
       handleFatalRuntimeError: (prefix, error) => this.handleFatalRuntimeError(prefix, error),
       flushCompactionQueue: (options) => this.flushCompactionQueue(options),
@@ -471,11 +469,33 @@ export class InteractiveMode {
           setAutocompleteMaxVisible?(maxVisible: number): void;
         },
       startupContent: this.startupContent,
-      resetExtensionUI: () => this.resetExtensionUI(),
+      resetExtensionUI: () => this.interactiveExtensions.reset(),
       refreshAutocomplete: () => this.setupAutocompleteProvider(),
-      setupExtensionShortcuts: () => this.setupExtensionShortcuts(this.runtimeHost.session.extensionRunner),
+      setupExtensionShortcuts: () => this.interactiveExtensions.setupShortcuts(this.runtimeHost.session.extensionRunner),
       rebuildChatFromMessages: () => this.rebuildChatFromMessages(),
       showLoadedResources: () => this.showLoadedResources({ force: false, showDiagnosticsWhenQuiet: true }),
+    };
+  }
+
+  private createExtensionCommandContextActions(): ExtensionCommandContextActions {
+    return {
+      waitForIdle: () => this.runtimeHost.session.agent.waitForIdle(),
+      newSession: async (options) => {
+        const result = await startNewSession(this.createSessionCommandDependencies(), options);
+        return result ?? { cancelled: false };
+      },
+      fork: async (entryId, options) => {
+        return forkSessionAtEntry(this.createSessionCommandDependencies(), entryId, options);
+      },
+      navigateTree: async (targetId, options) => {
+        return navigateSessionTree(this.createSessionCommandDependencies(), targetId, options);
+      },
+      switchSession: async (sessionPath, options) => {
+        return resumeSession(this.createSessionCommandDependencies(), sessionPath, options);
+      },
+      reload: async () => {
+        await runReload(this.createReloadDependencies());
+      },
     };
   }
 
@@ -583,7 +603,7 @@ export class InteractiveMode {
       this.startupContent = undefined;
     }
 
-    this.renderWidgets(); // Initialize with default spacer
+    this.interactiveExtensions.renderWidgets(); // Initialize with default spacer
     this.composition.attachRoot();
     this.ui.setFocus(this.editor);
 
@@ -787,238 +807,28 @@ export class InteractiveMode {
     force?: boolean;
     showDiagnosticsWhenQuiet?: boolean;
   }): void {
-    const showListing = options?.force || this.options.verbose || !this.runtimeHost.session.settingsManager.getQuietStartup();
-    const showDiagnostics = showListing || options?.showDiagnosticsWhenQuiet === true;
-    if (!showListing && !showDiagnostics) {
-      return;
-    }
-
-    const sectionHeader = (name: string, color: ThemeColor = "mdHeading") => theme.fg(color, `[${name}]`);
-    const formatCompactList = (items: string[], options?: { sort?: boolean }): string => {
-      const labels = items.map((item) => item.trim()).filter((item) => item.length > 0);
-      if (options?.sort !== false) {
-        labels.sort((a, b) => a.localeCompare(b));
-      }
-      return theme.fg("dim", `  ${labels.join(", ")}`);
-    };
-    const addLoadedSection = (
-      name: string,
-      collapsedBody: string,
-      expandedBody = collapsedBody,
-      color: ThemeColor = "mdHeading",
-    ): void => {
-      const section = new ExpandableText(
-        () => `${sectionHeader(name, color)}\n${collapsedBody}`,
-        () => `${sectionHeader(name, color)}\n${expandedBody}`,
-        this.getStartupExpansionState(),
-        0,
-        0,
-      );
-      this.chatContainer.addChild(section);
-      this.chatContainer.addChild(new Spacer(1));
-    };
-
-    const cwd = this.runtimeHost.session.sessionManager.getCwd();
-    const homeDir = os.homedir();
-    const skillsResult = this.runtimeHost.session.resourceLoader.getSkills();
-    const promptsResult = this.runtimeHost.session.resourceLoader.getPrompts();
-    const themesResult = this.runtimeHost.session.resourceLoader.getThemes();
-    const extensions =
-      options?.extensions ??
-      this.runtimeHost.session.resourceLoader.getExtensions().extensions.map((extension) => ({
-        path: extension.path,
-        sourceInfo: extension.sourceInfo,
-      }));
-    const sourceInfos = new Map<string, SourceInfo>();
-    for (const extension of extensions) {
-      if (extension.sourceInfo) {
-        sourceInfos.set(extension.path, extension.sourceInfo);
-      }
-    }
-    for (const skill of skillsResult.skills) {
-      if (skill.sourceInfo) {
-        sourceInfos.set(skill.filePath, skill.sourceInfo);
-      }
-    }
-    for (const prompt of promptsResult.prompts) {
-      if (prompt.sourceInfo) {
-        sourceInfos.set(prompt.filePath, prompt.sourceInfo);
-      }
-    }
-    for (const loadedTheme of themesResult.themes) {
-      if (loadedTheme.sourcePath && loadedTheme.sourceInfo) {
-        sourceInfos.set(loadedTheme.sourcePath, loadedTheme.sourceInfo);
-      }
-    }
-
-    if (showListing) {
-      const contextFiles = this.runtimeHost.session.resourceLoader.getAgentsFiles().agentsFiles;
-      if (contextFiles.length > 0) {
-        this.chatContainer.addChild(new Spacer(1));
-        const contextList = contextFiles.map((f) => theme.fg("dim", `  ${formatDisplayPath(f.path, homeDir)}`)).join("\n");
-        const contextCompactList = formatCompactList(
-          contextFiles.map((contextFile) => formatContextPath(contextFile.path, cwd, homeDir)),
-          { sort: false },
-        );
-        addLoadedSection("Context", contextCompactList, contextList);
-      }
-
-      const skills = skillsResult.skills;
-      if (skills.length > 0) {
-        const groups = buildScopeGroups(
-          skills.map((skill) => ({ path: skill.filePath, sourceInfo: skill.sourceInfo })),
-        );
-        const skillList = formatScopeGroups(groups, {
-          formatPath: (item) => formatDisplayPath(item.path, homeDir),
-          formatPackagePath: (item) => getShortPath(item.path, item.sourceInfo, homeDir),
-        });
-        const skillCompactList = formatCompactList(skills.map((skill) => skill.name));
-        addLoadedSection("Skills", skillCompactList, skillList);
-      }
-
-      const templates = this.runtimeHost.session.promptTemplates;
-      if (templates.length > 0) {
-        const groups = buildScopeGroups(
-          templates.map((template) => ({ path: template.filePath, sourceInfo: template.sourceInfo })),
-        );
-        const templateByPath = new Map(templates.map((t) => [t.filePath, t]));
-        const templateList = formatScopeGroups(groups, {
-          formatPath: (item) => {
-            const template = templateByPath.get(item.path);
-            return template ? `/${template.name}` : formatDisplayPath(item.path, homeDir);
-          },
-          formatPackagePath: (item) => {
-            const template = templateByPath.get(item.path);
-            return template ? `/${template.name}` : formatDisplayPath(item.path, homeDir);
-          },
-        });
-        const promptCompactList = formatCompactList(templates.map((template) => `/${template.name}`));
-        addLoadedSection("Prompts", promptCompactList, templateList);
-      }
-
-      if (extensions.length > 0) {
-        const groups = buildScopeGroups(extensions);
-        const extList = formatScopeGroups(groups, {
-          formatPath: (item) => formatExtensionDisplayPath(item.path, homeDir),
-          formatPackagePath: (item) => formatExtensionDisplayPath(getShortPath(item.path, item.sourceInfo, homeDir), homeDir),
-        });
-        const extensionCompactList = formatCompactList(getCompactExtensionLabels(extensions, homeDir));
-        addLoadedSection("Extensions", extensionCompactList, extList, "mdHeading");
-      }
-
-      // Show loaded themes (excluding built-in)
-      const loadedThemes = themesResult.themes;
-      const customThemes = loadedThemes.filter((t) => t.sourcePath);
-      if (customThemes.length > 0) {
-        const groups = buildScopeGroups(
-          customThemes.map((loadedTheme) => ({
-            path: loadedTheme.sourcePath!,
-            sourceInfo: loadedTheme.sourceInfo,
-          })),
-        );
-        const themeList = formatScopeGroups(groups, {
-          formatPath: (item) => formatDisplayPath(item.path, homeDir),
-          formatPackagePath: (item) => getShortPath(item.path, item.sourceInfo, homeDir),
-        });
-        const themeCompactList = formatCompactList(
-          customThemes.map(
-            (loadedTheme) =>
-              loadedTheme.name ?? getCompactPathLabel(loadedTheme.sourcePath!, loadedTheme.sourceInfo, homeDir),
-          ),
-        );
-        addLoadedSection("Themes", themeCompactList, themeList);
-      }
-    }
-
-    if (showDiagnostics) {
-      const skillDiagnostics = skillsResult.diagnostics;
-      if (skillDiagnostics.length > 0) {
-        const warningLines = formatDiagnostics(skillDiagnostics, sourceInfos, homeDir);
-        this.chatContainer.addChild(new Text(`${theme.fg("warning", "[Skill conflicts]")}\n${warningLines}`, 0, 0));
-        this.chatContainer.addChild(new Spacer(1));
-      }
-
-      const promptDiagnostics = promptsResult.diagnostics;
-      if (promptDiagnostics.length > 0) {
-        const warningLines = formatDiagnostics(promptDiagnostics, sourceInfos, homeDir);
-        this.chatContainer.addChild(new Text(`${theme.fg("warning", "[Prompt conflicts]")}\n${warningLines}`, 0, 0));
-        this.chatContainer.addChild(new Spacer(1));
-      }
-
-      const extensionDiagnostics: ResourceDiagnostic[] = [];
-      const extensionErrors = this.runtimeHost.session.resourceLoader.getExtensions().errors;
-      if (extensionErrors.length > 0) {
-        for (const error of extensionErrors) {
-          extensionDiagnostics.push({ type: "error", message: error.error, path: error.path });
-        }
-      }
-
-      const commandDiagnostics = this.runtimeHost.session.extensionRunner.getCommandDiagnostics();
-      extensionDiagnostics.push(...commandDiagnostics);
-      extensionDiagnostics.push(...getBuiltInCommandConflictDiagnostics(this.runtimeHost.session.extensionRunner, this.getBuiltInCommands()));
-
-      const shortcutDiagnostics = this.runtimeHost.session.extensionRunner.getShortcutDiagnostics();
-      extensionDiagnostics.push(...shortcutDiagnostics);
-
-      if (extensionDiagnostics.length > 0) {
-        const warningLines = formatDiagnostics(extensionDiagnostics, sourceInfos, homeDir);
-        this.chatContainer.addChild(new Text(`${theme.fg("warning", "[Extension issues]")}\n${warningLines}`, 0, 0));
-        this.chatContainer.addChild(new Spacer(1));
-      }
-
-      const themeDiagnostics = themesResult.diagnostics;
-      if (themeDiagnostics.length > 0) {
-        const warningLines = formatDiagnostics(themeDiagnostics, sourceInfos, homeDir);
-        this.chatContainer.addChild(new Text(`${theme.fg("warning", "[Theme conflicts]")}\n${warningLines}`, 0, 0));
-        this.chatContainer.addChild(new Spacer(1));
-      }
-    }
+    showLoadedResources({
+      chatContainer: this.chatContainer,
+      resourceLoader: this.runtimeHost.session.resourceLoader,
+      extensionRunner: this.runtimeHost.session.extensionRunner,
+      commands: this.getBuiltInCommands(),
+      promptTemplates: this.runtimeHost.session.promptTemplates,
+      cwd: this.runtimeHost.session.sessionManager.getCwd(),
+      verbose: this.options.verbose ?? false,
+      quietStartup: this.runtimeHost.session.settingsManager.getQuietStartup(),
+      getStartupExpansionState: () => this.getStartupExpansionState(),
+      extensions: options?.extensions,
+      force: options?.force,
+      showDiagnosticsWhenQuiet: options?.showDiagnosticsWhenQuiet,
+    });
   }
 
   /**
    * Initialize the extension system with TUI-based UI context.
    */
   private async bindCurrentSessionExtensions(): Promise<void> {
-    const uiContext = this.createExtensionUIContext();
-    await this.runtimeHost.session.bindExtensions({
-      uiContext,
-      commandContextActions: {
-        waitForIdle: () => this.runtimeHost.session.agent.waitForIdle(),
-        newSession: async (options) => {
-          const result = await startNewSession(this.createSessionCommandDependencies(), options);
-          return result ?? { cancelled: false };
-        },
-        fork: async (entryId, options) => {
-          return forkSessionAtEntry(this.createSessionCommandDependencies(), entryId, options);
-        },
-        navigateTree: async (targetId, options) => {
-          return navigateSessionTree(this.createSessionCommandDependencies(), targetId, options);
-        },
-        switchSession: async (sessionPath, options) => {
-          return resumeSession(this.createSessionCommandDependencies(), sessionPath, options);
-        },
-        reload: async () => {
-          await runReload(this.createReloadDependencies());
-        },
-      },
-      shutdownHandler: () => {
-        this.shutdownRequested = true;
-        if (!this.runtimeHost.session.isStreaming) {
-          void this.shutdown();
-        }
-      },
-      onError: (error) => {
-        this.showExtensionError(error.extensionPath, error.error, error.stack);
-      },
-    });
-
     setRegisteredThemes(this.runtimeHost.session.resourceLoader.getThemes().themes);
-    this.setupAutocompleteProvider();
-
-    const extensionRunner = this.runtimeHost.session.extensionRunner;
-    this.setupExtensionShortcuts(extensionRunner);
-    this.showLoadedResources({ force: false, showDiagnosticsWhenQuiet: true });
-    this.showStartupNoticesIfNeeded();
+    await this.interactiveExtensions.bindCurrentSession();
   }
 
   private applyRuntimeSettings(): void {
@@ -1082,68 +892,6 @@ export class InteractiveMode {
     return this.runtimeHost.session.getToolDefinition(toolName);
   }
 
-  /**
-   * Set up keyboard shortcuts registered by extensions.
-   */
-  private setupExtensionShortcuts(extensionRunner: ExtensionRunner): void {
-    const shortcuts = extensionRunner.getShortcuts(this.keybindings.getEffectiveConfig());
-    if (shortcuts.size === 0) return;
-
-    // Create a context for shortcut handlers
-    const createContext = (): ExtensionContext => ({
-      ui: this.createExtensionUIContext(),
-      hasUI: true,
-      cwd: this.runtimeHost.session.sessionManager.getCwd(),
-      sessionManager: this.runtimeHost.session.sessionManager,
-      modelRegistry: this.runtimeHost.session.modelRegistry,
-      model: this.runtimeHost.session.model,
-      isIdle: () => !this.runtimeHost.session.isStreaming,
-      signal: this.runtimeHost.session.agent.signal,
-      abort: () => this.runtimeHost.session.abort(),
-      hasPendingMessages: () => this.runtimeHost.session.pendingMessageCount > 0,
-      shutdown: () => {
-        this.shutdownRequested = true;
-      },
-      getContextUsage: () => this.runtimeHost.session.getContextUsage(),
-      compact: (options) => {
-        void (async () => {
-          try {
-            const result = await this.runtimeHost.session.compact(options?.customInstructions);
-            options?.onComplete?.(result);
-          } catch (error) {
-            const err = error instanceof Error ? error : new Error(String(error));
-            options?.onError?.(err);
-          }
-        })();
-      },
-      getSystemPrompt: () => this.runtimeHost.session.systemPrompt,
-    });
-
-    // Set up the extension shortcut handler on the default editor
-    this.defaultEditor.onExtensionShortcut = (data: string) => {
-      for (const [shortcutStr, shortcut] of shortcuts) {
-        // Cast to KeyId - extension shortcuts use the same format
-        if (matchesKey(data, shortcutStr as KeyId)) {
-          // Run handler async, don't block input
-          Promise.resolve(shortcut.handler(createContext())).catch((err) => {
-            this.showError(`Shortcut handler error: ${err instanceof Error ? err.message : String(err)}`);
-          });
-          return true;
-        }
-      }
-      return false;
-    };
-  }
-
-  /**
-   * Set extension status text in the footer.
-   */
-  private setExtensionStatus(key: string, text: string | undefined): void {
-    this.state.footer.setExtensionStatus({ key, text });
-    this.footerDataProvider.setExtensionStatus(key, text);
-    this.ui.requestRender();
-  }
-
   private getWorkingLoaderMessage(): string {
     return this.state.shell.$working.getState().message ?? this.defaultWorkingMessage;
   }
@@ -1181,6 +929,13 @@ export class InteractiveMode {
     this.ui.requestRender();
   }
 
+  private setWorkingMessage(message: string | undefined): void {
+    this.state.shell.setWorkingMessage(message);
+    if (this.loadingAnimation) {
+      this.loadingAnimation.setMessage(message ?? this.defaultWorkingMessage);
+    }
+  }
+
   private setWorkingIndicator(options?: LoaderIndicatorOptions): void {
     this.state.shell.setWorkingIndicator(options);
     this.loadingAnimation?.setIndicator(options);
@@ -1200,569 +955,12 @@ export class InteractiveMode {
     this.ui.requestRender();
   }
 
-  /**
-   * Set an extension widget (string array or custom component).
-   */
-  private setExtensionWidget(
-    key: string,
-    content: string[] | ((tui: TUI, thm: Theme) => Component & { dispose?(): void }) | undefined,
-    options?: ExtensionWidgetOptions,
-  ): void {
-    const placement = options?.placement ?? "aboveEditor";
-    const removeExisting = (map: Map<string, Component & { dispose?(): void }>) => {
-      const existing = map.get(key);
-      if (existing?.dispose) existing.dispose();
-      map.delete(key);
-    };
-
-    removeExisting(this.extensionWidgetsAbove);
-    removeExisting(this.extensionWidgetsBelow);
-
-    if (content === undefined) {
-      this.renderWidgets();
-      return;
-    }
-
-    let component: Component & { dispose?(): void };
-
-    if (Array.isArray(content)) {
-      // Wrap string array in a Container with Text components
-      const container = new Container();
-      for (const line of content.slice(0, InteractiveMode.MAX_WIDGET_LINES)) {
-        container.addChild(new Text(line, 1, 0));
-      }
-      if (content.length > InteractiveMode.MAX_WIDGET_LINES) {
-        container.addChild(new Text(theme.fg("muted", "... (widget truncated)"), 1, 0));
-      }
-      component = container;
-    } else {
-      // Factory function - create component
-      component = content(this.ui, theme);
-    }
-
-    const targetMap = placement === "belowEditor" ? this.extensionWidgetsBelow : this.extensionWidgetsAbove;
-    targetMap.set(key, component);
-    this.renderWidgets();
-  }
-
-  private clearExtensionWidgets(): void {
-    for (const widget of this.extensionWidgetsAbove.values()) {
-      widget.dispose?.();
-    }
-    for (const widget of this.extensionWidgetsBelow.values()) {
-      widget.dispose?.();
-    }
-    this.extensionWidgetsAbove.clear();
-    this.extensionWidgetsBelow.clear();
-    this.renderWidgets();
-  }
-
-  private resetExtensionUI(): void {
-    if (this.extensionSelector) {
-      this.hideExtensionSelector();
-    }
-    if (this.extensionInput) {
-      this.hideExtensionInput();
-    }
-    if (this.extensionEditor) {
-      this.hideExtensionEditor();
-    }
-    this.ui.hideOverlay();
-    this.clearExtensionTerminalInputListeners();
-    this.setExtensionFooter(undefined);
-    this.setExtensionHeader(undefined);
-    this.clearExtensionWidgets();
-    this.state.footer.clearExtensionStatuses();
-    this.footerDataProvider.clearExtensionStatuses();
-    this.footer.invalidate();
-    this.autocompleteProviderWrappers = [];
-    this.setCustomEditorComponent(undefined);
-    this.setupAutocompleteProvider();
-    this.defaultEditor.onExtensionShortcut = undefined;
-    this.updateTerminalTitle();
-    this.state.shell.setWorkingMessage(undefined);
-    this.state.shell.setWorkingVisible(true);
-    this.setWorkingIndicator();
-    if (this.loadingAnimation) {
-      this.loadingAnimation.setMessage(`${this.defaultWorkingMessage} (${keyText("app.interrupt")} to interrupt)`);
-    }
-    this.setHiddenThinkingLabel();
-  }
-
-  // Maximum total widget lines to prevent viewport overflow
-  private static readonly MAX_WIDGET_LINES = 10;
-
-  /**
-   * Render all extension widgets to the widget container.
-   */
-  private renderWidgets(): void {
-    if (!this.widgetContainerAbove || !this.widgetContainerBelow) return;
-    this.renderWidgetContainer(this.widgetContainerAbove, this.extensionWidgetsAbove, true, true);
-    this.renderWidgetContainer(this.widgetContainerBelow, this.extensionWidgetsBelow, false, false);
-    this.ui.requestRender();
-  }
-
-  private renderWidgetContainer(
-    container: Container,
-    widgets: Map<string, Component & { dispose?(): void }>,
-    spacerWhenEmpty: boolean,
-    leadingSpacer: boolean,
-  ): void {
-    container.clear();
-
-    if (widgets.size === 0) {
-      if (spacerWhenEmpty) {
-        container.addChild(new Spacer(1));
-      }
-      return;
-    }
-
-    if (leadingSpacer) {
-      container.addChild(new Spacer(1));
-    }
-    for (const component of widgets.values()) {
-      container.addChild(component);
-    }
-  }
-
-  /**
-   * Set a custom footer component, or restore the built-in footer.
-   */
-  private setExtensionFooter(
-    factory:
-      | ((tui: TUI, thm: Theme, footerData: ReadonlyFooterDataProvider) => Component & { dispose?(): void })
-      | undefined,
-  ): void {
-    // Dispose existing custom footer
-    if (this.customFooter?.dispose) {
-      this.customFooter.dispose();
-    }
-
-    // Remove current footer from UI
-    if (this.customFooter) {
-      this.ui.removeChild(this.customFooter);
-    } else {
-      this.ui.removeChild(this.footer);
-    }
-
-    if (factory) {
-      // Create and add custom footer, passing the data provider
-      this.customFooter = factory(this.ui, theme, this.footerDataProvider);
-      this.ui.addChild(this.customFooter);
-    } else {
-      // Restore built-in footer
-      this.customFooter = undefined;
-      this.ui.addChild(this.footer);
-    }
-
-    this.ui.requestRender();
-  }
-
-  /**
-   * Permanent headers conflict with the V1 shell timeline model: startup and
-   * extension output must scroll with the rest of the timeline.
-   */
-  private setExtensionHeader(_factory: ((tui: TUI, thm: Theme) => Component & { dispose?(): void }) | undefined): void {
-    this.ui.requestRender();
-  }
-
-  private addExtensionTerminalInputListener(
-    handler: (data: string) => { consume?: boolean; data?: string } | undefined,
-  ): () => void {
-    const unsubscribe = this.ui.addInputListener(handler);
-    this.extensionTerminalInputUnsubscribers.add(unsubscribe);
-    return () => {
-      unsubscribe();
-      this.extensionTerminalInputUnsubscribers.delete(unsubscribe);
-    };
-  }
-
-  private clearExtensionTerminalInputListeners(): void {
-    for (const unsubscribe of this.extensionTerminalInputUnsubscribers) {
-      unsubscribe();
-    }
-    this.extensionTerminalInputUnsubscribers.clear();
-  }
-
-  /**
-   * Create the ExtensionUIContext for extensions.
-   */
-  private createExtensionUIContext(): ExtensionUIContext {
-    return {
-      select: (title, options, opts) => this.showExtensionSelector(title, options, opts),
-      confirm: (title, message, opts) => this.showExtensionConfirm(title, message, opts),
-      input: (title, placeholder, opts) => this.showExtensionInput(title, placeholder, opts),
-      notify: (message, type) => this.showExtensionNotify(message, type),
-      onTerminalInput: (handler) => this.addExtensionTerminalInputListener(handler),
-      setStatus: (key, text) => this.setExtensionStatus(key, text),
-      setWorkingMessage: (message) => {
-        this.state.shell.setWorkingMessage(message);
-        if (this.loadingAnimation) {
-          this.loadingAnimation.setMessage(message ?? this.defaultWorkingMessage);
-        }
-      },
-      setWorkingVisible: (visible) => this.setWorkingVisible(visible),
-      setWorkingIndicator: (options) => this.setWorkingIndicator(options),
-      setHiddenThinkingLabel: (label) => this.setHiddenThinkingLabel(label),
-      setWidget: (key, content, options) => this.setExtensionWidget(key, content, options),
-      setFooter: (factory) => this.setExtensionFooter(factory),
-      setHeader: (factory) => this.setExtensionHeader(factory),
-      setTitle: (title) => this.ui.terminal.setTitle(title),
-      custom: (factory, options) => this.showExtensionCustom(factory, options),
-      pasteToEditor: (text) => this.editor.handleInput(`\x1b[200~${text}\x1b[201~`),
-      setEditorText: (text) => this.editor.setText(text),
-      getEditorText: () => this.editor.getExpandedText?.() ?? this.editor.getText(),
-      editor: (title, prefill) => this.showExtensionEditor(title, prefill),
-      addAutocompleteProvider: (factory) => {
-        this.autocompleteProviderWrappers.push(factory);
-        this.setupAutocompleteProvider();
-      },
-      setEditorComponent: (factory) => this.setCustomEditorComponent(factory),
-      getEditorComponent: () => this.editorComponentFactory,
-      get theme() {
-        return theme;
-      },
-      getAllThemes: () => getAvailableThemesWithPaths(),
-      getTheme: (name) => getThemeByName(name),
-      setTheme: (themeOrName) => {
-        if (themeOrName instanceof Theme) {
-          setThemeInstance(themeOrName);
-          this.ui.requestRender();
-          return { success: true };
-        }
-        const result = setTheme(themeOrName, true);
-        if (result.success) {
-          if (this.runtimeHost.session.settingsManager.getTheme() !== themeOrName) {
-            this.runtimeHost.session.settingsManager.setTheme(themeOrName);
-          }
-          this.ui.requestRender();
-        }
-        return result;
-      },
-      getToolsExpanded: () => this.state.shell.$toolOutputExpanded.getState(),
-      setToolsExpanded: (expanded) => this.setToolsExpanded(expanded),
-    };
-  }
-
-  /**
-   * Show a selector for extensions.
-   */
-  private showExtensionSelector(
-    title: string,
-    options: string[],
-    opts?: ExtensionUIDialogOptions,
-  ): Promise<string | undefined> {
-    return new Promise((resolve) => {
-      if (opts?.signal?.aborted) {
-        resolve(undefined);
-        return;
-      }
-
-      const onAbort = () => {
-        this.hideExtensionSelector();
-        resolve(undefined);
-      };
-      opts?.signal?.addEventListener("abort", onAbort, { once: true });
-
-      this.extensionSelector = new ExtensionSelectorComponent(
-        title,
-        options,
-        (option) => {
-          opts?.signal?.removeEventListener("abort", onAbort);
-          this.hideExtensionSelector();
-          resolve(option);
-        },
-        () => {
-          opts?.signal?.removeEventListener("abort", onAbort);
-          this.hideExtensionSelector();
-          resolve(undefined);
-        },
-        { tui: this.ui, timeout: opts?.timeout },
-      );
-
-      this.composition.setEditorHost(this.extensionSelector);
-    });
-  }
-
-  /**
-   * Hide the extension selector.
-   */
-  private hideExtensionSelector(): void {
-    this.extensionSelector?.dispose();
-    this.extensionSelector = undefined;
-    this.composition.restoreEditorHost(this.editor);
-  }
-
-  /**
-   * Show a confirmation dialog for extensions.
-   */
-  private async showExtensionConfirm(
-    title: string,
-    message: string,
-    opts?: ExtensionUIDialogOptions,
-  ): Promise<boolean> {
-    const result = await this.showExtensionSelector(`${title}\n${message}`, ["Yes", "No"], opts);
-    return result === "Yes";
-  }
-
   private async promptForMissingSessionCwd(error: MissingSessionCwdError): Promise<string | undefined> {
-    const confirmed = await this.showExtensionConfirm(
+    const confirmed = await this.interactiveExtensions.showConfirm(
       "Session cwd not found",
       formatMissingSessionCwdPrompt(error.cwd),
     );
     return confirmed ? process.cwd() : undefined;
-  }
-
-  /**
-   * Show a text input for extensions.
-   */
-  private showExtensionInput(
-    title: string,
-    placeholder?: string,
-    opts?: ExtensionUIDialogOptions,
-  ): Promise<string | undefined> {
-    return new Promise((resolve) => {
-      if (opts?.signal?.aborted) {
-        resolve(undefined);
-        return;
-      }
-
-      const onAbort = () => {
-        this.hideExtensionInput();
-        resolve(undefined);
-      };
-      opts?.signal?.addEventListener("abort", onAbort, { once: true });
-
-      this.extensionInput = new ExtensionInputComponent(
-        title,
-        placeholder,
-        (value) => {
-          opts?.signal?.removeEventListener("abort", onAbort);
-          this.hideExtensionInput();
-          resolve(value);
-        },
-        () => {
-          opts?.signal?.removeEventListener("abort", onAbort);
-          this.hideExtensionInput();
-          resolve(undefined);
-        },
-        { tui: this.ui, timeout: opts?.timeout },
-      );
-
-      this.composition.setEditorHost(this.extensionInput);
-    });
-  }
-
-  /**
-   * Hide the extension input.
-   */
-  private hideExtensionInput(): void {
-    this.extensionInput?.dispose();
-    this.extensionInput = undefined;
-    this.composition.restoreEditorHost(this.editor);
-  }
-
-  /**
-   * Show a multi-line editor for extensions (with Ctrl+G support).
-   */
-  private showExtensionEditor(title: string, prefill?: string): Promise<string | undefined> {
-    return new Promise((resolve) => {
-      this.extensionEditor = new ExtensionEditorComponent(
-        this.ui,
-        this.keybindings,
-        title,
-        prefill,
-        (value) => {
-          this.hideExtensionEditor();
-          resolve(value);
-        },
-        () => {
-          this.hideExtensionEditor();
-          resolve(undefined);
-        },
-      );
-
-      this.composition.setEditorHost(this.extensionEditor);
-    });
-  }
-
-  /**
-   * Hide the extension editor.
-   */
-  private hideExtensionEditor(): void {
-    this.extensionEditor = undefined;
-    this.composition.restoreEditorHost(this.editor);
-  }
-
-  /**
-   * Set a custom editor component from an extension.
-   * Pass undefined to restore the default editor.
-   */
-  private setCustomEditorComponent(factory: EditorFactory | undefined): void {
-    this.editorComponentFactory = factory;
-
-    // Save text from current editor before switching
-    const currentText = this.editor.getText();
-
-    if (factory) {
-      // Create the custom editor with tui, theme, and keybindings
-      const newEditor = factory(this.ui, getEditorTheme(), this.keybindings);
-
-      // Wire up callbacks from the default editor
-      newEditor.onSubmit = this.defaultEditor.onSubmit;
-      newEditor.onChange = this.defaultEditor.onChange;
-
-      // Copy text from previous editor
-      newEditor.setText(currentText);
-
-      // Copy appearance settings if supported
-      if (newEditor.borderColor !== undefined) {
-        newEditor.borderColor = this.defaultEditor.borderColor;
-      }
-      if (newEditor.setPaddingX !== undefined) {
-        newEditor.setPaddingX(this.defaultEditor.getPaddingX());
-      }
-
-      // Set autocomplete if supported
-      if (newEditor.setAutocompleteProvider && this.autocompleteProvider) {
-        newEditor.setAutocompleteProvider(this.autocompleteProvider);
-      }
-
-      // If extending CustomEditor, copy app-level handlers
-      // Use duck typing since instanceof fails across jiti module boundaries
-      const customEditor = newEditor as unknown as Record<string, unknown>;
-      if ("actionHandlers" in customEditor && customEditor.actionHandlers instanceof Map) {
-        if (!customEditor.onEscape) {
-          customEditor.onEscape = () => this.defaultEditor.onEscape?.();
-        }
-        if (!customEditor.onCtrlD) {
-          customEditor.onCtrlD = () => this.defaultEditor.onCtrlD?.();
-        }
-        if (!customEditor.onPasteImage) {
-          customEditor.onPasteImage = () => this.defaultEditor.onPasteImage?.();
-        }
-        if (!customEditor.onExtensionShortcut) {
-          customEditor.onExtensionShortcut = (data: string) => this.defaultEditor.onExtensionShortcut?.(data);
-        }
-        // Copy action handlers (clear, suspend, model switching, etc.)
-        for (const [action, handler] of this.defaultEditor.actionHandlers) {
-          (customEditor.actionHandlers as Map<string, () => void>).set(action, handler);
-        }
-      }
-
-      this.editor = newEditor;
-    } else {
-      // Restore default editor with text from custom editor
-      this.defaultEditor.setText(currentText);
-      this.editor = this.defaultEditor;
-    }
-
-    this.composition.restoreEditorHost(this.editor as Component);
-  }
-
-  /**
-   * Show a notification for extensions.
-   */
-  private showExtensionNotify(message: string, type?: "info" | "warning" | "error"): void {
-    if (type === "error") {
-      this.showError(message);
-    } else if (type === "warning") {
-      this.showWarning(message);
-    } else {
-      this.showStatus(message);
-    }
-  }
-
-  /** Show a custom component with keyboard focus. Overlay mode renders on top of existing content. */
-  private async showExtensionCustom<T>(
-    factory: (
-      tui: TUI,
-      theme: Theme,
-      keybindings: KeybindingsManager,
-      done: (result: T) => void,
-    ) => (Component & { dispose?(): void }) | Promise<Component & { dispose?(): void }>,
-    options?: {
-      overlay?: boolean;
-      overlayOptions?: OverlayOptions | (() => OverlayOptions);
-      onHandle?: (handle: OverlayHandle) => void;
-    },
-  ): Promise<T> {
-    const savedText = this.editor.getText();
-    const isOverlay = options?.overlay ?? false;
-
-    const restoreEditor = () => {
-      this.editor.setText(savedText);
-      this.composition.restoreEditorHost(this.editor);
-    };
-
-    return new Promise((resolve, reject) => {
-      let component: Component & { dispose?(): void };
-      let closed = false;
-
-      const close = (result: T) => {
-        if (closed) return;
-        closed = true;
-        if (isOverlay) this.ui.hideOverlay();
-        else restoreEditor();
-        // Note: both branches above already call requestRender
-        resolve(result);
-        try {
-          component?.dispose?.();
-        } catch {
-          /* ignore dispose errors */
-        }
-      };
-
-      Promise.resolve(factory(this.ui, theme, this.keybindings, close))
-        .then((c) => {
-          if (closed) return;
-          component = c;
-          if (isOverlay) {
-            // Resolve overlay options - can be static or dynamic function
-            const resolveOptions = (): OverlayOptions | undefined => {
-              if (options?.overlayOptions) {
-                const opts =
-                  typeof options.overlayOptions === "function" ? options.overlayOptions() : options.overlayOptions;
-                return opts;
-              }
-              // Fallback: use component's width property if available
-              const w = (component as { width?: number }).width;
-              return w ? { width: w } : undefined;
-            };
-            const handle = this.ui.showOverlay(component, resolveOptions());
-            // Expose handle to caller for visibility control
-            options?.onHandle?.(handle);
-          } else {
-            this.composition.setEditorHost(component);
-          }
-        })
-        .catch((err) => {
-          if (closed) return;
-          if (!isOverlay) restoreEditor();
-          reject(err);
-        });
-    });
-  }
-
-  /**
-   * Show an extension error in the UI.
-   */
-  private showExtensionError(extensionPath: string, error: string, stack?: string): void {
-    const errorMsg = `Extension "${extensionPath}" error: ${error}`;
-    const errorText = new Text(theme.fg("error", errorMsg), 1, 0);
-    this.chatContainer.addChild(errorText);
-    if (stack) {
-      // Show stack trace in dim color, indented
-      const stackLines = stack
-        .split("\n")
-        .slice(1) // Skip first line (duplicates error message)
-        .map((line) => theme.fg("dim", `  ${line.trim()}`))
-        .join("\n");
-      if (stackLines) {
-        this.chatContainer.addChild(new Text(stackLines, 1, 0));
-      }
-    }
-    this.ui.requestRender();
   }
 
   // =========================================================================
@@ -2776,13 +1974,7 @@ export class InteractiveMode {
   }
 
   private isExtensionCommand(text: string): boolean {
-    if (!text.startsWith("/")) return false;
-
-    const extensionRunner = this.runtimeHost.session.extensionRunner;
-
-    const spaceIndex = text.indexOf(" ");
-    const commandName = spaceIndex === -1 ? text.slice(1) : text.slice(1, spaceIndex);
-    return !!extensionRunner.getCommand(commandName);
+    return this.interactiveExtensions.isExtensionCommand(text);
   }
 
   private async flushCompactionQueue(options?: { willRetry?: boolean }): Promise<void> {
@@ -2870,7 +2062,7 @@ export class InteractiveMode {
       this.loadingAnimation.stop();
       this.loadingAnimation = undefined;
     }
-    this.clearExtensionTerminalInputListeners();
+    this.interactiveExtensions.dispose();
     this.composition.dispose();
     this.state.dispose();
     if (this.unsubscribe) {
