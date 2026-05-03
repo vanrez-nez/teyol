@@ -17,9 +17,9 @@ import { keyText } from "./components/keybinding-hints.js";
 import type { TimelineBlock } from "./components/timeline/base-block.js";
 import { LogoBlock } from "./components/timeline/logo-block.js";
 import { StartupBlock } from "./components/timeline/startup-block.js";
+import { UserMessageBlock } from "./components/timeline/user-message-block.js";
 import { SkillInvocationMessageComponent } from "./components/skill-invocation-message.js";
 import { ToolExecutionComponent } from "./components/tool-execution.js";
-import { UserMessageComponent } from "./components/user-message.js";
 import type { ShellLayoutComponent } from "./layout.js";
 import type { CliState } from "./state/index.js";
 import { getUserMessageText } from "./display-helpers.js";
@@ -243,19 +243,16 @@ export class Timeline {
       case "user": {
         const textContent = getUserMessageText(message);
         if (textContent) {
-          if (chatContainer.children.length > 0) {
-            chatContainer.addChild(new Spacer(1));
-          }
           const skillBlock = parseSkillBlock(textContent);
           if (skillBlock) {
             const component = new SkillInvocationMessageComponent(skillBlock, this.dependencies.getMarkdownTheme());
             component.setExpanded(state.shell.$toolOutputExpanded.getState());
             chatContainer.addChild(component);
             if (skillBlock.userMessage) {
-              chatContainer.addChild(new UserMessageComponent(skillBlock.userMessage, this.dependencies.getMarkdownTheme()));
+              this.pushUserMessageBlock(skillBlock.userMessage);
             }
           } else {
-            chatContainer.addChild(new UserMessageComponent(textContent, this.dependencies.getMarkdownTheme()));
+            this.pushUserMessageBlock(textContent);
           }
           if (options?.populateHistory) {
             this.dependencies.getEditor().addToHistory?.(textContent);
@@ -546,5 +543,15 @@ export class Timeline {
 		if (!this.dependencies.chatContainer.children.includes(this.blockHost)) {
 			this.dependencies.chatContainer.addChild(this.blockHost);
 		}
+	}
+
+	private pushUserMessageBlock(text: string): void {
+		this.pushBlock(
+			new UserMessageBlock({
+				text,
+				markdownTheme: this.dependencies.getMarkdownTheme(),
+				margin: { top: this.blocks.length > 0 ? 1 : 0 },
+			}),
+		);
 	}
 }

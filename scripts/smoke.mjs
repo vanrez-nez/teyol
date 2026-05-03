@@ -35,7 +35,7 @@ import {
 	getUserMessageText,
 } from "../dist/shell/tui/display-helpers.js";
 import { Timeline } from "../dist/shell/tui/timeline.js";
-import { TimelineBlock } from "../dist/shell/tui/components/index.js";
+import { TimelineBlock, UserMessageBlock } from "../dist/shell/tui/components/index.js";
 import { buildHotkeyHelpMarkdown } from "../dist/shell/tui/hotkeys/help.js";
 import { Container, visibleWidth } from "../dist/tui/index.js";
 
@@ -526,6 +526,9 @@ function staticComponent(lines) {
 
 function createTimelineForTest(options = {}) {
 	const chatContainer = new Container();
+	const editor = options.editor ?? {
+		addToHistory() {},
+	};
 	const timeline = new Timeline(
 		{
 			ui: {
@@ -543,14 +546,14 @@ function createTimelineForTest(options = {}) {
 				invalidate() {},
 			},
 			getSession: () => undefined,
-			getEditor: () => undefined,
+			getEditor: () => editor,
 			getMarkdownTheme: () => undefined,
 			getRegisteredToolDefinition: () => undefined,
 			updateEditorBorderColor() {},
 		},
-		options,
+		options.timelineOptions ?? options,
 	);
-	return { timeline, chatContainer };
+	return { timeline, chatContainer, editor };
 }
 
 function createShellLayoutForTest(options = {}) {
@@ -682,6 +685,51 @@ function testTimelineStartupBlocks() {
 	timeline.renderStartupContent(undefined);
 	assert.equal(timeline.getStartupContent(), undefined);
 	assert.deepEqual(timeline.render(80), []);
+}
+
+function testUserMessageBlock() {
+	initTheme("dark", false);
+	const block = new UserMessageBlock({ id: "user-1", text: "hello **world**" });
+	const rendered = block.render(80);
+	assert.ok(rendered[0].includes("\x1b]133;A\x07"));
+	assert.ok(rendered[rendered.length - 1].includes("\x1b]133;B\x07"));
+	assert.ok(rendered[rendered.length - 1].includes("\x1b]133;C\x07"));
+	assert.match(rendered.join("\n"), /hello/);
+	assert.match(rendered.join("\n"), /world/);
+	assert.deepEqual(block.serialize(), {
+		type: "user-message",
+		id: "user-1",
+		state: { text: "hello **world**" },
+	});
+}
+
+function testTimelineUserMessageBlocks() {
+	initTheme("dark", false);
+	const history = [];
+	const editor = {
+		addToHistory(text) {
+			history.push(text);
+		},
+	};
+	const { timeline, chatContainer } = createTimelineForTest({ editor });
+
+	timeline.addMessage({ role: "user", content: "hello from timeline", timestamp: Date.now() }, { populateHistory: true });
+
+	assert.equal(chatContainer.children.length, 1);
+	assert.deepEqual(history, ["hello from timeline"]);
+	assert.match(timeline.render(80).join("\n"), /hello from timeline/);
+}
+
+function testTimelineSkillBlockTrailingUserMessage() {
+	initTheme("dark", false);
+	const { timeline } = createTimelineForTest();
+	timeline.addMessage({
+		role: "user",
+		content: '<skill name="demo" location="/tmp/demo">\nbody\n</skill>\n\ncontinue here',
+		timestamp: Date.now(),
+	});
+
+	assert.match(timeline.render(80).join("\n"), /continue here/);
 }
 
 function testShellLayoutNarrowWidth() {
@@ -839,6 +887,9 @@ testUiDescriptorContracts();
 testTimelineBlockBaseContract();
 testTimelineBlockRendering();
 testTimelineStartupBlocks();
+testUserMessageBlock();
+testTimelineUserMessageBlocks();
+testTimelineSkillBlockTrailingUserMessage();
 testShellLayoutNarrowWidth();
 testShellLayoutWideWidth();
 testShellLayoutUsesTallerSide();

@@ -19,5 +19,10 @@ export { TimelineBlock, type TimelineBlockEdges, type TimelineBlockOptions, type
 export { loadAsciiLogo, LogoBlock, type LogoBlockOptions, type LogoBlockState, type SerializedLogoBlock } from "./timeline/logo-block.js";
 export { StartupBlock, type SerializedStartupBlock, type StartupBlockOptions, type StartupBlockState } from "./timeline/startup-block.js";
 export { ToolExecutionComponent, type ToolExecutionOptions } from "./tool-execution.js";
-export { UserMessageComponent } from "./user-message.js";
+export {
+	type SerializedUserMessageBlock,
+	UserMessageBlock,
+	type UserMessageBlockOptions,
+	type UserMessageBlockState,
+} from "./timeline/user-message-block.js";
 export { truncateToVisualLines, type VisualTruncateResult } from "./visual-truncate.js";
