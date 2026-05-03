@@ -114,7 +114,7 @@ export class AssistantToolBlock extends TimelineBlock {
 		this.maybeConvertImagesForKitty();
 	}
 
-	setExpanded(expanded: boolean): void {
+	setDetailsExpanded(expanded: boolean): void {
 		this.expanded = expanded;
 		this.markDirty();
 	}

@@ -290,13 +290,13 @@ export async function runRpcMode(runtimeHost: AgentSessionRuntime): Promise<neve
       return { success: false, error: "Theme switching not supported in RPC mode" };
     },
 
-    getToolsExpanded() {
-      // Tool expansion not supported in RPC mode - no TUI
+    getDetailsExpanded() {
+      // Details expansion not supported in RPC mode - no TUI
       return false;
     },
 
-    setToolsExpanded(_expanded: boolean) {
-      // Tool expansion not supported in RPC mode - no TUI
+    setDetailsExpanded(_expanded: boolean) {
+      // Details expansion not supported in RPC mode - no TUI
     },
   });
 

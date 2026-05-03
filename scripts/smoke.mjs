@@ -581,8 +581,8 @@ function createTimelineForTest(options = {}) {
 		hiddenThinkingLabel: "thinking",
 		autoCompactEnabled: false,
 	});
-	if (options.toolsExpanded) {
-		state.shell.setToolsExpanded(true);
+	if (options.detailsExpanded) {
+		state.shell.setDetailsExpanded(true);
 	}
 	const session = {
 		settingsManager: {
@@ -797,7 +797,7 @@ function testCompactionSummaryBlock() {
 		},
 	});
 
-	block.setExpanded(true);
+	block.setDetailsExpanded(true);
 	const expanded = block.render(100).join("\n");
 	assert.match(expanded, /Compacted from 12,345 tokens/);
 	assert.match(expanded, /summary text/);
@@ -821,7 +821,7 @@ function testTimelineCompactionSummaryBlock() {
 	assert.match(collapsed, /Compacted from 12,345 tokens/);
 	assert.doesNotMatch(collapsed, /summary text/);
 
-	composition.setToolsExpanded(true);
+	composition.setDetailsExpanded(true);
 	const expanded = timeline.render(100).join("\n");
 	assert.match(expanded, /summary text/);
 }
@@ -842,7 +842,7 @@ function testLoadedResourcesBlock() {
 
 	assert.match(block.render(80).join("\n"), /compact/);
 	assert.doesNotMatch(block.render(80).join("\n"), /expanded\/path/);
-	block.setExpanded(true);
+	block.setDetailsExpanded(true);
 	assert.match(block.render(80).join("\n"), /expanded\/path/);
 	assert.deepEqual(block.serialize(), {
 		type: "loaded-resources",
@@ -1115,7 +1115,7 @@ function testTimelineAssistantToolEventsUseExpandedSetting() {
 		},
 	};
 	const { timeline, composition } = createTimelineForTest({
-		toolsExpanded: true,
+		detailsExpanded: true,
 		getRegisteredToolDefinition: () => toolDefinition,
 	});
 
@@ -1298,8 +1298,8 @@ function testCliStateShellAndFooter() {
 	});
 	try {
 		assert.equal(state.shell.$hideThinkingBlock.getState(), true);
-		state.shell.setToolsExpanded(true);
-		assert.equal(state.shell.$toolOutputExpanded.getState(), true);
+		state.shell.setDetailsExpanded(true);
+		assert.equal(state.shell.$detailsExpanded.getState(), true);
 		state.shell.setHiddenThinkingLabel("Reasoning hidden");
 		assert.equal(state.shell.$hiddenThinkingLabel.getState(), "Reasoning hidden");
 		state.shell.setWorkingMessage("Syncing");

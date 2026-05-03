@@ -8,7 +8,7 @@ export interface WorkingIndicatorState {
 }
 
 export interface ShellStateSnapshot {
-	toolOutputExpanded: boolean;
+	detailsExpanded: boolean;
 	hideThinkingBlock: boolean;
 	hiddenThinkingLabel: string;
 	working: WorkingIndicatorState;
@@ -20,7 +20,7 @@ export interface ShellStateOptions {
 }
 
 export function createShellState(options: ShellStateOptions) {
-	const setToolsExpanded = createEvent<boolean>();
+	const setDetailsExpanded = createEvent<boolean>();
 	const setHideThinkingBlock = createEvent<boolean>();
 	const setHiddenThinkingLabel = createEvent<string | undefined>();
 	const setWorkingMessage = createEvent<string | undefined>();
@@ -28,7 +28,7 @@ export function createShellState(options: ShellStateOptions) {
 	const setWorkingIndicator = createEvent<LoaderIndicatorOptions | undefined>();
 	const resetExtensionShell = createEvent<void>();
 
-	const $toolOutputExpanded = createStore(false).on(setToolsExpanded, (_, expanded) => expanded);
+	const $detailsExpanded = createStore(false).on(setDetailsExpanded, (_, expanded) => expanded);
 	const $hideThinkingBlock = createStore(options.hideThinkingBlock).on(setHideThinkingBlock, (_, hidden) => hidden);
 	const $hiddenThinkingLabel = createStore(options.hiddenThinkingLabel).on(
 		setHiddenThinkingLabel,
@@ -45,19 +45,19 @@ export function createShellState(options: ShellStateOptions) {
 		.on(resetExtensionShell, () => ({ visible: true, message: undefined, indicator: undefined }));
 
 	const $snapshot = combine({
-		toolOutputExpanded: $toolOutputExpanded,
+		detailsExpanded: $detailsExpanded,
 		hideThinkingBlock: $hideThinkingBlock,
 		hiddenThinkingLabel: $hiddenThinkingLabel,
 		working: $working,
 	});
 
 	return {
-		$toolOutputExpanded,
+		$detailsExpanded,
 		$hideThinkingBlock,
 		$hiddenThinkingLabel,
 		$working,
 		$snapshot,
-		setToolsExpanded,
+		setDetailsExpanded,
 		setHideThinkingBlock,
 		setHiddenThinkingLabel,
 		setWorkingMessage,

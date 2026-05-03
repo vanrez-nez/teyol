@@ -38,7 +38,7 @@ export class CompactionSummaryBlock extends TimelineBlock {
 		this.markdownTheme = options.markdownTheme ?? getMarkdownTheme();
 	}
 
-	setExpanded(expanded: boolean): void {
+	setDetailsExpanded(expanded: boolean): void {
 		this.expanded = expanded;
 		this.markDirty();
 	}
@@ -62,7 +62,7 @@ export class CompactionSummaryBlock extends TimelineBlock {
 		this.addChild(
 			new Text(
 				theme.fg("customMessageText", `Compacted from ${tokenStr} tokens (`) +
-					theme.fg("dim", keyText("app.tools.expand")) +
+					theme.fg("dim", keyText("app.details.expand")) +
 					theme.fg("customMessageText", " to expand)"),
 				0,
 				0,

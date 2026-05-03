@@ -23,7 +23,7 @@ export interface AssistantMessageBlockOptions extends TimelineBlockOptions {
 	hiddenThinkingLabel?: string;
 	showImages?: boolean;
 	imageWidthCells?: number;
-	toolsExpanded?: boolean;
+	detailsExpanded?: boolean;
 	getToolDefinition?: (toolName: string) => ToolDefinition<any, any> | undefined;
 	ui?: TUI;
 	cwd?: string;
@@ -38,7 +38,7 @@ export class AssistantMessageBlock extends TimelineBlock {
 	private toolBlocks = new Map<string, AssistantToolBlock>();
 	private showImages: boolean;
 	private imageWidthCells: number;
-	private toolsExpanded: boolean;
+	private detailsExpanded: boolean;
 	private getToolDefinition: (toolName: string) => ToolDefinition<any, any> | undefined;
 	private ui: TUI | undefined;
 	private cwd: string;
@@ -50,7 +50,7 @@ export class AssistantMessageBlock extends TimelineBlock {
 		this.hiddenThinkingLabel = options.hiddenThinkingLabel ?? "Thinking...";
 		this.showImages = options.showImages ?? true;
 		this.imageWidthCells = options.imageWidthCells ?? 60;
-		this.toolsExpanded = options.toolsExpanded ?? false;
+		this.detailsExpanded = options.detailsExpanded ?? false;
 		this.getToolDefinition = options.getToolDefinition ?? (() => undefined);
 		this.ui = options.ui;
 		this.cwd = options.cwd ?? process.cwd();
@@ -114,7 +114,7 @@ export class AssistantMessageBlock extends TimelineBlock {
 			args: toolCall.arguments,
 			showImages: this.showImages,
 			imageWidthCells: this.imageWidthCells,
-			expanded: this.toolsExpanded,
+			expanded: this.detailsExpanded,
 			toolDefinition: this.getToolDefinition(toolCall.name),
 			ui: this.ui ?? ({ requestRender() {} } as TUI),
 			cwd: this.cwd,
@@ -199,10 +199,10 @@ export class AssistantMessageBlock extends TimelineBlock {
 		this.markDirty();
 	}
 
-	setToolsExpanded(expanded: boolean): void {
-		this.toolsExpanded = expanded;
+	setDetailsExpanded(expanded: boolean): void {
+		this.detailsExpanded = expanded;
 		for (const block of this.toolBlocks.values()) {
-			block.setExpanded(expanded);
+			block.setDetailsExpanded(expanded);
 		}
 		this.markDirty();
 	}

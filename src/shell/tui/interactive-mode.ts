@@ -250,8 +250,8 @@ export class InteractiveMode {
       setWorkingVisible: (visible) => this.setWorkingVisible(visible),
       setWorkingIndicator: (options) => this.setWorkingIndicator(options),
       setHiddenThinkingLabel: (label) => this.setHiddenThinkingLabel(label),
-      setToolsExpanded: (expanded) => this.setToolsExpanded(expanded),
-      getToolsExpanded: () => this.state.shell.$toolOutputExpanded.getState(),
+      setDetailsExpanded: (expanded) => this.setDetailsExpanded(expanded),
+      getDetailsExpanded: () => this.state.shell.$detailsExpanded.getState(),
       pasteToEditor: (text) => this.editor.handleInput(`\x1b[200~${text}\x1b[201~`),
       setEditorText: (text) => this.editor.setText(text),
       getEditorText: () => this.editor.getExpandedText?.() ?? this.editor.getText(),
@@ -469,7 +469,7 @@ export class InteractiveMode {
         hint("app.thinking.cycle", "to cycle thinking level"),
         rawKeyHint(`${keyText("app.model.cycleForward")}/${keyText("app.model.cycleBackward")}`, "to cycle models"),
         hint("app.model.select", "to select model"),
-        hint("app.tools.expand", "to expand tools"),
+        hint("app.details.expand", "to expand details"),
         hint("app.thinking.toggle", "to expand thinking"),
         hint("app.editor.external", "for external editor"),
         rawKeyHint("/", "for commands"),
@@ -485,11 +485,11 @@ export class InteractiveMode {
         rawKeyHint(`${keyText("app.clear")}/${keyText("app.exit")}`, "clear/exit"),
         rawKeyHint("/", "commands"),
         rawKeyHint("!", "bash"),
-        hint("app.tools.expand", "more"),
+        hint("app.details.expand", "more"),
       ].join(theme.fg("muted", " · "));
       const compactOnboarding = theme.fg(
         "dim",
-        `Press ${keyText("app.tools.expand")} to show full startup help and loaded resources.`,
+        `Press ${keyText("app.details.expand")} to show full startup help and loaded resources.`,
       );
       const onboarding = theme.fg(
         "dim",
@@ -703,7 +703,7 @@ export class InteractiveMode {
   // =========================================================================
 
   private getStartupExpansionState(): boolean {
-    return this.options.verbose || this.state.shell.$toolOutputExpanded.getState();
+    return this.options.verbose || this.state.shell.$detailsExpanded.getState();
   }
 
   private showLoadedResources(options?: {
@@ -873,7 +873,7 @@ export class InteractiveMode {
         cycleThinkingLevel: () => this.cycleThinkingLevel(),
         cycleModel: (direction) => this.cycleModel(direction),
         showModelSelector: () => showModelSelector(this.createModelCommandDependencies()),
-        toggleToolOutputExpansion: () => this.toggleToolOutputExpansion(),
+        toggleDetailsExpansion: () => this.toggleDetailsExpansion(),
         toggleThinkingBlockVisibility: () => this.toggleThinkingBlockVisibility(),
         openExternalEditor: () => this.openExternalEditor(),
         followUp: () => this.handleFollowUp(),
@@ -1472,12 +1472,12 @@ export class InteractiveMode {
     }
   }
 
-  private toggleToolOutputExpansion(): void {
-    this.setToolsExpanded(!this.state.shell.$toolOutputExpanded.getState());
+  private toggleDetailsExpansion(): void {
+    this.setDetailsExpanded(!this.state.shell.$detailsExpanded.getState());
   }
 
-  private setToolsExpanded(expanded: boolean): void {
-    this.timelineComposition.setToolsExpanded(expanded);
+  private setDetailsExpanded(expanded: boolean): void {
+    this.timelineComposition.setDetailsExpanded(expanded);
   }
 
   private toggleThinkingBlockVisibility(): void {

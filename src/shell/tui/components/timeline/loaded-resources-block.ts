@@ -36,7 +36,7 @@ export class LoadedResourcesBlock extends TimelineBlock {
 		this.expanded = options.expanded;
 	}
 
-	setExpanded(expanded: boolean): void {
+	setDetailsExpanded(expanded: boolean): void {
 		this.expanded = expanded;
 		this.markDirty();
 	}

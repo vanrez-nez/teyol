@@ -67,7 +67,7 @@ const RESERVED_KEYBINDINGS_FOR_EXTENSION_CONFLICTS = [
 	"app.model.cycleForward",
 	"app.model.cycleBackward",
 	"app.model.select",
-	"app.tools.expand",
+	"app.details.expand",
 	"app.thinking.toggle",
 	"app.editor.external",
 	"app.message.followUp",
@@ -215,8 +215,8 @@ const noOpUIContext: ExtensionUIContext = {
 	getAllThemes: () => [],
 	getTheme: () => undefined,
 	setTheme: (_theme: string | any) => ({ success: false, error: "UI not available" }),
-	getToolsExpanded: () => false,
-	setToolsExpanded: () => {},
+	getDetailsExpanded: () => false,
+	setDetailsExpanded: () => {},
 };
 
 export class ExtensionRunner {

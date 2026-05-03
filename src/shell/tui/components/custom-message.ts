@@ -35,7 +35,7 @@ export class CustomMessageComponent extends Container {
 		this.rebuild();
 	}
 
-	setExpanded(expanded: boolean): void {
+	setDetailsExpanded(expanded: boolean): void {
 		if (this._expanded !== expanded) {
 			this._expanded = expanded;
 			this.rebuild();

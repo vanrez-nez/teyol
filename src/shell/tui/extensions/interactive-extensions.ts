@@ -53,8 +53,8 @@ export interface InteractiveExtensionsOptions {
 	setWorkingVisible(visible: boolean): void;
 	setWorkingIndicator(options?: Parameters<ExtensionUIContext["setWorkingIndicator"]>[0]): void;
 	setHiddenThinkingLabel(label?: string): void;
-	setToolsExpanded(expanded: boolean): void;
-	getToolsExpanded(): boolean;
+	setDetailsExpanded(expanded: boolean): void;
+	getDetailsExpanded(): boolean;
 	pasteToEditor(text: string): void;
 	setEditorText(text: string): void;
 	getEditorText(): string;
@@ -243,8 +243,8 @@ export class InteractiveExtensions {
 				}
 				return result;
 			},
-			getToolsExpanded: () => this.options.getToolsExpanded(),
-			setToolsExpanded: (expanded) => this.options.setToolsExpanded(expanded),
+			getDetailsExpanded: () => this.options.getDetailsExpanded(),
+			setDetailsExpanded: (expanded) => this.options.setDetailsExpanded(expanded),
 		};
 	}
 

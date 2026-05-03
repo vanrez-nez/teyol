@@ -198,7 +198,7 @@ export class TimelineComposition {
 				if (message.display) {
 					const renderer = this.dependencies.getSession().extensionRunner.getMessageRenderer(message.customType);
 					const component = new CustomMessageComponent(message, renderer, this.dependencies.getMarkdownTheme());
-					component.setExpanded(state.shell.$toolOutputExpanded.getState());
+					component.setDetailsExpanded(state.shell.$detailsExpanded.getState());
 					chatContainer.addChild(component);
 				}
 				break;
@@ -207,7 +207,7 @@ export class TimelineComposition {
 				this.dependencies.timeline.pushBlock(
 					new CompactionSummaryBlock({
 						message,
-						expanded: state.shell.$toolOutputExpanded.getState(),
+						expanded: state.shell.$detailsExpanded.getState(),
 						markdownTheme: this.dependencies.getMarkdownTheme(),
 					}),
 				);
@@ -219,7 +219,7 @@ export class TimelineComposition {
 					const skillBlock = parseSkillBlock(textContent);
 					if (skillBlock) {
 						const component = new SkillInvocationMessageComponent(skillBlock, this.dependencies.getMarkdownTheme());
-						component.setExpanded(state.shell.$toolOutputExpanded.getState());
+						component.setDetailsExpanded(state.shell.$detailsExpanded.getState());
 						chatContainer.addChild(component);
 						if (skillBlock.userMessage) {
 							this.pushUserMessageBlock(skillBlock.userMessage);
@@ -340,18 +340,18 @@ export class TimelineComposition {
 		this.dependencies.ui.requestRender();
 	}
 
-	setToolsExpanded(expanded: boolean): void {
-		this.dependencies.state.shell.setToolsExpanded(expanded);
+	setDetailsExpanded(expanded: boolean): void {
+		this.dependencies.state.shell.setDetailsExpanded(expanded);
 		for (const block of this.dependencies.timeline.getBlocks()) {
 			if (
 				block instanceof StartupBlock ||
 				block instanceof LoadedResourcesBlock ||
 				block instanceof CompactionSummaryBlock
 			) {
-				block.setExpanded(expanded);
+				block.setDetailsExpanded(expanded);
 			}
 			if (block instanceof AssistantMessageBlock) {
-				block.setToolsExpanded(expanded);
+				block.setDetailsExpanded(expanded);
 			}
 		}
 		this.dependencies.ui.requestRender();
@@ -415,7 +415,7 @@ export class TimelineComposition {
 			hiddenThinkingLabel: this.dependencies.state.shell.$hiddenThinkingLabel.getState(),
 			showImages: session.settingsManager.getShowImages(),
 			imageWidthCells: session.settingsManager.getImageWidthCells(),
-			toolsExpanded: this.dependencies.state.shell.$toolOutputExpanded.getState(),
+			detailsExpanded: this.dependencies.state.shell.$detailsExpanded.getState(),
 			getToolDefinition: (toolName) => this.dependencies.getRegisteredToolDefinition(toolName),
 			ui: this.dependencies.ui,
 			cwd: session.sessionManager.getCwd(),

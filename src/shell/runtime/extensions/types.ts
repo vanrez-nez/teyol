@@ -209,11 +209,11 @@ export interface ExtensionUIContext {
 	/** Set the current theme by name or Theme object. */
 	setTheme(theme: string | any): { success: boolean; error?: string };
 
-	/** Get current tool output expansion state. */
-	getToolsExpanded(): boolean;
+	/** Get current details expansion state. */
+	getDetailsExpanded(): boolean;
 
-	/** Set tool output expansion state. */
-	setToolsExpanded(expanded: boolean): void;
+	/** Set details expansion state. */
+	setDetailsExpanded(expanded: boolean): void;
 }
 
 // ============================================================================

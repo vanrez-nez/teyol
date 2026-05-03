@@ -58,7 +58,7 @@ export function buildHotkeyHelpMarkdown(options: BuildHotkeyHelpOptions): string
 	const cycleThinkingLevel = appKey("app.thinking.cycle");
 	const cycleModelForward = appKey("app.model.cycleForward");
 	const selectModel = appKey("app.model.select");
-	const expandTools = appKey("app.tools.expand");
+	const expandDetails = appKey("app.details.expand");
 	const toggleThinking = appKey("app.thinking.toggle");
 	const externalEditor = appKey("app.editor.external");
 	const cycleModelBackward = appKey("app.model.cycleBackward");
@@ -102,7 +102,7 @@ export function buildHotkeyHelpMarkdown(options: BuildHotkeyHelpOptions): string
 | \`${cycleThinkingLevel}\` | Cycle thinking level |
 | \`${cycleModelForward}\` / \`${cycleModelBackward}\` | Cycle models |
 | \`${selectModel}\` | Open model selector |
-| \`${expandTools}\` | Toggle tool output expansion |
+| \`${expandDetails}\` | Toggle details expansion |
 | \`${toggleThinking}\` | Toggle thinking block visibility |
 | \`${externalEditor}\` | Edit message in external editor |
 | \`${followUp}\` | Queue follow-up message |

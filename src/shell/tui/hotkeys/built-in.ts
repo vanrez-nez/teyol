@@ -10,7 +10,7 @@ export interface BuiltInHotkeyHandlers {
 	cycleThinkingLevel(): void;
 	cycleModel(direction: "forward" | "backward"): void;
 	showModelSelector(): void;
-	toggleToolOutputExpansion(): void;
+	toggleDetailsExpansion(): void;
 	toggleThinkingBlockVisibility(): void;
 	openExternalEditor(): void;
 	followUp(): void;
@@ -66,7 +66,7 @@ export function setupBuiltInHotkeys(options: SetupBuiltInHotkeysOptions): void {
 	defaultEditor.onAction("app.model.cycleBackward", () => handlers.cycleModel("backward"));
 	ui.onDebug = () => handlers.printLogFile();
 	defaultEditor.onAction("app.model.select", () => handlers.showModelSelector());
-	defaultEditor.onAction("app.tools.expand", () => handlers.toggleToolOutputExpansion());
+	defaultEditor.onAction("app.details.expand", () => handlers.toggleDetailsExpansion());
 	defaultEditor.onAction("app.thinking.toggle", () => handlers.toggleThinkingBlockVisibility());
 	defaultEditor.onAction("app.editor.external", () => handlers.openExternalEditor());
 	defaultEditor.onAction("app.message.followUp", () => handlers.followUp());

@@ -40,7 +40,7 @@ export class StartupBlock extends TimelineBlock {
 		this.onboarding = options.onboarding;
 	}
 
-	setExpanded(expanded: boolean): void {
+	setDetailsExpanded(expanded: boolean): void {
 		this.expanded = expanded;
 		this.markDirty();
 	}

@@ -20,7 +20,7 @@ export class SkillInvocationMessageComponent extends Box {
 		this.updateDisplay();
 	}
 
-	setExpanded(expanded: boolean): void {
+	setDetailsExpanded(expanded: boolean): void {
 		this.expanded = expanded;
 		this.updateDisplay();
 	}
@@ -48,7 +48,7 @@ export class SkillInvocationMessageComponent extends Box {
 			const line =
 				theme.fg("customMessageLabel", `\x1b[1m[skill]\x1b[22m `) +
 				theme.fg("customMessageText", this.skillBlock.name) +
-				theme.fg("dim", ` (${keyText("app.tools.expand")} to expand)`);
+				theme.fg("dim", ` (${keyText("app.details.expand")} to expand)`);
 			this.addChild(new Text(line, 0, 0));
 		}
 	}
