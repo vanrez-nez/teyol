@@ -57,9 +57,6 @@ export interface StartupContentOptions {
 }
 
 export class TimelineComposition {
-	private activeAssistantBlock: AssistantMessageBlock | undefined = undefined;
-	private activeAssistantMessage: AssistantMessage | undefined = undefined;
-	private assistantMessageStreaming = false;
 	private lastStatusSpacer: Spacer | undefined = undefined;
 	private lastStatusText: Text | undefined = undefined;
 	private startupContent: TimelineBlock | undefined = undefined;
@@ -120,9 +117,6 @@ export class TimelineComposition {
 		this.startupContent = undefined;
 		this.loadedResourcesBlock = undefined;
 		this.dependencies.pendingMessagesContainer.clear();
-		this.activeAssistantBlock = undefined;
-		this.activeAssistantMessage = undefined;
-		this.assistantMessageStreaming = false;
 		this.lastStatusSpacer = undefined;
 		this.lastStatusText = undefined;
 	}
@@ -326,87 +320,6 @@ export class TimelineComposition {
 		this.renderSessionContext(context);
 	}
 
-	startAssistantMessage(message: AssistantMessage): void {
-		this.activeAssistantBlock = this.createAssistantMessageBlock({ margin: { top: this.dependencies.timeline.getBlockCount() > 0 ? 1 : 0 } });
-		this.activeAssistantMessage = message;
-		this.assistantMessageStreaming = true;
-		this.dependencies.timeline.pushBlock(this.activeAssistantBlock);
-		this.activeAssistantBlock.updateContent(this.activeAssistantMessage);
-		this.dependencies.ui.requestRender();
-	}
-
-	updateAssistantMessage(message: AssistantMessage): void {
-		if (!this.activeAssistantBlock) {
-			return;
-		}
-
-		this.activeAssistantMessage = message;
-		this.activeAssistantBlock.updateContent(this.activeAssistantMessage);
-		this.dependencies.ui.requestRender();
-	}
-
-	finishAssistantMessage(message: AssistantMessage): void {
-		if (!this.activeAssistantBlock) {
-			return;
-		}
-
-		this.activeAssistantMessage = message;
-		let errorMessage: string | undefined;
-		if (this.activeAssistantMessage.stopReason === "aborted") {
-			const retryAttempt = this.dependencies.getSession().retryAttempt;
-			errorMessage =
-				retryAttempt > 0 ? `Aborted after ${retryAttempt} retry attempt${retryAttempt > 1 ? "s" : ""}` : "Operation aborted";
-			this.activeAssistantMessage.errorMessage = errorMessage;
-		}
-		this.activeAssistantBlock.updateContent(this.activeAssistantMessage);
-
-		if (this.activeAssistantMessage.stopReason === "aborted" || this.activeAssistantMessage.stopReason === "error") {
-			this.activeAssistantBlock.setOpenToolsError(errorMessage ?? this.activeAssistantMessage.errorMessage ?? "Error");
-		} else {
-			this.activeAssistantBlock.setOpenToolsArgsComplete();
-		}
-		this.activeAssistantMessage = undefined;
-		this.assistantMessageStreaming = false;
-		this.dependencies.footer.invalidate();
-		this.dependencies.ui.requestRender();
-	}
-
-	removeStreamingAssistant(): void {
-		if (this.activeAssistantBlock && this.assistantMessageStreaming) {
-			this.dependencies.timeline.removeBlock(this.activeAssistantBlock);
-			this.activeAssistantBlock = undefined;
-			this.activeAssistantMessage = undefined;
-			this.assistantMessageStreaming = false;
-		}
-	}
-
-	startTool(toolCallId: string, toolName: string, args: any): void {
-		const block = this.getOrCreateActiveAssistantBlock();
-		block.startTool(toolCallId, toolName, args);
-		this.dependencies.ui.requestRender();
-	}
-
-	updateToolPartialResult(
-		toolCallId: string,
-		partialResult: { content: Array<{ type: string; text?: string; data?: string; mimeType?: string }>; details?: any },
-	): void {
-		if (this.activeAssistantBlock) {
-			this.activeAssistantBlock.setToolPartialResult(toolCallId, partialResult);
-			this.dependencies.ui.requestRender();
-		}
-	}
-
-	finishTool(
-		toolCallId: string,
-		result: { content: Array<{ type: string; text?: string; data?: string; mimeType?: string }>; details?: any },
-		isError: boolean,
-	): void {
-		if (this.activeAssistantBlock) {
-			this.activeAssistantBlock.setToolResult(toolCallId, result, isError);
-			this.dependencies.ui.requestRender();
-		}
-	}
-
 	updatePendingMessagesDisplay(messages: { steering: string[]; followUp: string[] }): void {
 		this.dependencies.pendingMessagesContainer.clear();
 		if (messages.steering.length > 0 || messages.followUp.length > 0) {
@@ -457,17 +370,12 @@ export class TimelineComposition {
 	}
 
 	rebuildForThinkingVisibility(): void {
-		const activeBlock = this.activeAssistantBlock;
-		const activeMessage = this.activeAssistantMessage;
-		this.rebuildFromMessages();
-
-		if (activeBlock && activeMessage) {
-			activeBlock.setHideThinkingBlock(this.dependencies.state.shell.$hideThinkingBlock.getState());
-			activeBlock.updateContent(activeMessage);
-			this.dependencies.timeline.pushBlock(activeBlock);
-			this.activeAssistantBlock = activeBlock;
-			this.activeAssistantMessage = activeMessage;
+		for (const block of this.dependencies.timeline.getBlocks()) {
+			if (block instanceof AssistantMessageBlock) {
+				block.setHideThinkingBlock(this.dependencies.state.shell.$hideThinkingBlock.getState());
+			}
 		}
+		this.dependencies.ui.requestRender();
 	}
 
 	setToolImagesVisible(show: boolean): void {
@@ -499,6 +407,10 @@ export class TimelineComposition {
 	}
 
 	private pushAssistantMessageBlock(message: AssistantMessage): AssistantMessageBlock {
+		return this.addAssistantMessageBlock(message);
+	}
+
+	addAssistantMessageBlock(message?: AssistantMessage): AssistantMessageBlock {
 		const block = this.createAssistantMessageBlock({
 			message,
 			margin: { top: this.dependencies.timeline.getBlockCount() > 0 ? 1 : 0 },
@@ -523,14 +435,4 @@ export class TimelineComposition {
 		});
 	}
 
-	private getOrCreateActiveAssistantBlock(): AssistantMessageBlock {
-		if (!this.activeAssistantBlock) {
-			this.activeAssistantBlock = this.createAssistantMessageBlock({
-				margin: { top: this.dependencies.timeline.getBlockCount() > 0 ? 1 : 0 },
-			});
-			this.dependencies.timeline.pushBlock(this.activeAssistantBlock);
-		}
-
-		return this.activeAssistantBlock;
-	}
 }

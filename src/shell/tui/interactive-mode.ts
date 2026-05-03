@@ -27,7 +27,7 @@ import {
 } from "../../config.js";
 import { logger } from "#logger";
 import type { ExtensionCommandContextActions } from "#shell/runtime/extensions/index.js";
-import type { AgentSessionEvent } from "#shell/runtime/agent-session.js";
+import type { AgentSessionEvent, PromptOptions } from "#shell/runtime/agent-session.js";
 import { type AppKeybinding, KeybindingsManager } from "#shell/runtime/keybindings.js";
 import { createCompactionSummaryMessage } from "#shell/runtime/messages.js";
 import { DefaultPackageManager } from "#shell/runtime/package-manager.js";
@@ -84,6 +84,7 @@ import { setupBuiltInHotkeys } from "./hotkeys/built-in.js";
 import { ShellLayoutComponent } from "./layout.js";
 import { Timeline } from "./timeline.js";
 import { TimelineComposition } from "./timeline-composition.js";
+import type { AssistantMessageBlock } from "./components/timeline/assistant-message-block.js";
 
 /**
  * Options for InteractiveMode initialization.
@@ -133,6 +134,7 @@ export class InteractiveMode {
 
   // Agent subscription unsubscribe function
   private unsubscribe?: () => void;
+  private readonly promptOwnedEvents = new WeakSet<AgentSessionEvent>();
   private signalCleanupHandlers: Array<() => void> = [];
 
   // Shell-like input shortcuts are intentionally extension-owned in the generic CLI.
@@ -595,7 +597,7 @@ export class InteractiveMode {
     // Process initial messages
     if (initialMessage) {
       try {
-        await this.runtimeHost.session.prompt(initialMessage, { images: initialImages });
+        await this.runPrompt(initialMessage, { images: initialImages });
       } catch (error: unknown) {
         const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
         this.showError(errorMessage);
@@ -605,7 +607,7 @@ export class InteractiveMode {
     if (initialMessages) {
       for (const message of initialMessages) {
         try {
-          await this.runtimeHost.session.prompt(message);
+          await this.runPrompt(message);
         } catch (error: unknown) {
           const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
           this.showError(errorMessage);
@@ -617,7 +619,7 @@ export class InteractiveMode {
     while (true) {
       const userInput = await this.getUserInput();
       try {
-        await this.runtimeHost.session.prompt(userInput);
+        await this.runPrompt(userInput);
       } catch (error: unknown) {
         const errorMessage = error instanceof Error ? error.message : "Unknown error occurred";
         this.showError(errorMessage);
@@ -893,6 +895,107 @@ export class InteractiveMode {
     // Mocked for now as readClipboardImage is missing
   }
 
+  private isPromptRenderEvent(event: AgentSessionEvent): boolean {
+    return (
+      event.type === "message_start" ||
+      event.type === "message_update" ||
+      event.type === "message_end" ||
+      event.type === "tool_execution_start" ||
+      event.type === "tool_execution_update" ||
+      event.type === "tool_execution_end"
+    );
+  }
+
+  private async runPrompt(text: string, options: PromptOptions = {}): Promise<void> {
+    let assistantBlock: AssistantMessageBlock | undefined;
+
+    const markPromptOwned = (event: AgentSessionEvent): void => {
+      this.promptOwnedEvents.add(event);
+    };
+
+    const finishAssistantBlock = (event: Extract<AgentSessionEvent, { type: "message_end" }>): void => {
+      if (event.message.role !== "assistant" || !assistantBlock) {
+        return;
+      }
+
+      let errorMessage: string | undefined;
+      if (event.message.stopReason === "aborted") {
+        const retryAttempt = this.runtimeHost.session.retryAttempt;
+        errorMessage =
+          retryAttempt > 0 ? `Aborted after ${retryAttempt} retry attempt${retryAttempt > 1 ? "s" : ""}` : "Operation aborted";
+        event.message.errorMessage = errorMessage;
+      }
+
+      assistantBlock.updateContent(event.message);
+      if (event.message.stopReason === "aborted" || event.message.stopReason === "error") {
+        assistantBlock.setOpenToolsError(errorMessage ?? event.message.errorMessage ?? "Error");
+      } else {
+        assistantBlock.setOpenToolsArgsComplete();
+      }
+      this.footer.invalidate();
+      this.ui.requestRender();
+    };
+
+    await this.runtimeHost.session.prompt(text, {
+      ...options,
+      onEvent: async (event) => {
+        await options.onEvent?.(event);
+
+        switch (event.type) {
+          case "message_start":
+            if (event.message.role === "custom") {
+              markPromptOwned(event);
+              this.timelineComposition.addMessage(event.message);
+              this.ui.requestRender();
+            } else if (event.message.role === "user") {
+              markPromptOwned(event);
+              this.timelineComposition.addMessage(event.message);
+              this.updatePendingMessagesDisplay();
+              this.ui.requestRender();
+            } else if (event.message.role === "assistant") {
+              markPromptOwned(event);
+              assistantBlock = this.timelineComposition.addAssistantMessageBlock(event.message);
+              this.ui.requestRender();
+            }
+            break;
+
+          case "message_update":
+            if (event.message.role === "assistant") {
+              markPromptOwned(event);
+              assistantBlock?.updateContent(event.message);
+              this.ui.requestRender();
+            }
+            break;
+
+          case "message_end":
+            if (event.message.role === "assistant") {
+              markPromptOwned(event);
+              finishAssistantBlock(event);
+            }
+            break;
+
+          case "tool_execution_start":
+            markPromptOwned(event);
+            assistantBlock?.startTool(event.toolCallId, event.toolName, event.args);
+            this.ui.requestRender();
+            break;
+
+          case "tool_execution_update":
+            markPromptOwned(event);
+            assistantBlock?.setToolPartialResult(event.toolCallId, event.partialResult);
+            this.ui.requestRender();
+            break;
+
+          case "tool_execution_end":
+            markPromptOwned(event);
+            assistantBlock?.setToolResult(event.toolCallId, event.result, event.isError);
+            this.ui.requestRender();
+            break;
+        }
+      },
+    });
+  }
+
   private setupEditorSubmitHandler(): void {
     this.defaultEditor.onSubmit = async (text: string) => {
       text = text.trim();
@@ -951,6 +1054,10 @@ export class InteractiveMode {
 
     this.footer.invalidate();
 
+    if (this.promptOwnedEvents.has(event) && this.isPromptRenderEvent(event)) {
+      return;
+    }
+
     switch (event.type) {
       case "agent_start":
         if (this.runtimeHost.session.settingsManager.getShowTerminalProgress()) {
@@ -998,36 +1105,28 @@ export class InteractiveMode {
           this.updatePendingMessagesDisplay();
           this.ui.requestRender();
         } else if (event.message.role === "assistant") {
-          this.timelineComposition.startAssistantMessage(event.message);
+          this.timelineComposition.addAssistantMessageBlock(event.message);
+          this.ui.requestRender();
         }
         break;
 
       case "message_update":
-        if (event.message.role === "assistant") {
-          this.timelineComposition.updateAssistantMessage(event.message);
-        }
         break;
 
       case "message_end":
         if (event.message.role === "user") break;
-        if (event.message.role === "assistant") {
-          this.timelineComposition.finishAssistantMessage(event.message);
-        }
         this.ui.requestRender();
         break;
 
       case "tool_execution_start": {
-        this.timelineComposition.startTool(event.toolCallId, event.toolName, event.args);
         break;
       }
 
       case "tool_execution_update": {
-        this.timelineComposition.updateToolPartialResult(event.toolCallId, event.partialResult);
         break;
       }
 
       case "tool_execution_end": {
-        this.timelineComposition.finishTool(event.toolCallId, event.result, event.isError);
         break;
       }
 
@@ -1040,8 +1139,6 @@ export class InteractiveMode {
           this.loadingAnimation = undefined;
           this.timelineComposition.clearStatus();
         }
-        this.timelineComposition.removeStreamingAssistant();
-
         await this.checkShutdownRequested();
 
         this.ui.requestRender();
@@ -1578,7 +1675,7 @@ export class InteractiveMode {
       }
 
       // Send first prompt (starts streaming)
-      const promptPromise = this.runtimeHost.session.prompt(firstPrompt.text).catch((error) => {
+      const promptPromise = this.runPrompt(firstPrompt.text).catch((error) => {
         restoreQueue(error);
       });
 

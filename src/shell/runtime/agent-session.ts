@@ -121,6 +121,7 @@ export type AgentSessionEvent =
 
 /** Listener function for agent session events */
 export type AgentSessionEventListener = (event: AgentSessionEvent) => void;
+export type ScopedAgentSessionEventListener = (event: AgentSessionEvent) => void | Promise<void>;
 
 // ============================================================================
 // Types
@@ -175,6 +176,8 @@ export interface PromptOptions {
   source?: InputSource;
   /** Internal hook used by RPC mode to observe prompt preflight acceptance or rejection. */
   preflightResult?: (success: boolean) => void;
+  /** Prompt-scoped event listener for callers that own live UI/components for this prompt. */
+  onEvent?: ScopedAgentSessionEventListener;
 }
 
 /** Result from cycleModel() */
@@ -252,6 +255,7 @@ export class AgentSession {
   private _unsubscribeAgent?: () => void;
   private _eventListeners: AgentSessionEventListener[] = [];
   private _agentEventQueue: Promise<void> = Promise.resolve();
+  private _activePromptEventListener: ScopedAgentSessionEventListener | undefined;
 
   /** Tracks pending steering messages for UI display. Removed when delivered. */
   private _steeringMessages: string[] = [];
@@ -524,6 +528,10 @@ export class AgentSession {
 
     // Emit to extensions first
     await this._emitExtensionEvent(event);
+
+    if (this._activePromptEventListener) {
+      await this._activePromptEventListener(event);
+    }
 
     // Notify all listeners
     this._emit(event);
@@ -1084,8 +1092,14 @@ export class AgentSession {
     }
 
     preflightResult?.(true);
-    await this.agent.prompt(messages);
-    await this.waitForRetry();
+    const previousPromptEventListener = this._activePromptEventListener;
+    this._activePromptEventListener = options?.onEvent;
+    try {
+      await this.agent.prompt(messages);
+      await this.waitForRetry();
+    } finally {
+      this._activePromptEventListener = previousPromptEventListener;
+    }
   }
 
   /**

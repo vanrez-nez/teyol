@@ -1069,15 +1069,15 @@ function testTimelineAssistantMessageBlocks() {
 function testTimelineStreamingAssistantBlock() {
 	initTheme("dark", false);
 	const { timeline, composition } = createTimelineForTest();
-	composition.startAssistantMessage(createAssistantMessage([{ type: "text", text: "first" }]));
+	const block = composition.addAssistantMessageBlock(createAssistantMessage([{ type: "text", text: "first" }]));
 	assert.match(timeline.render(80).join("\n"), /first/);
 
-	composition.updateAssistantMessage(createAssistantMessage([{ type: "text", text: "second" }]));
+	block.updateContent(createAssistantMessage([{ type: "text", text: "second" }]));
 	const updated = timeline.render(80).join("\n");
 	assert.doesNotMatch(updated, /first/);
 	assert.match(updated, /second/);
 
-	composition.removeStreamingAssistant();
+	timeline.removeBlock(block);
 	assert.doesNotMatch(timeline.render(80).join("\n"), /second/);
 }
 
@@ -1085,14 +1085,14 @@ function testTimelineAssistantToolEvents() {
 	initTheme("dark", false);
 	const { timeline, composition, chatContainer } = createTimelineForTest();
 	const toolCall = { type: "toolCall", id: "tool-1", name: "demo", arguments: { query: "abc" } };
-	composition.startAssistantMessage(createAssistantMessage([{ type: "text", text: "before tool" }]));
-	composition.updateAssistantMessage(createAssistantMessage([{ type: "text", text: "before tool" }, toolCall]));
-	composition.finishAssistantMessage(createAssistantMessage([{ type: "text", text: "before tool" }, toolCall]));
-	composition.startTool("tool-1", "demo", toolCall.arguments);
-	composition.updateToolPartialResult("tool-1", { content: [{ type: "text", text: "partial output" }] });
+	const block = composition.addAssistantMessageBlock(createAssistantMessage([{ type: "text", text: "before tool" }]));
+	block.updateContent(createAssistantMessage([{ type: "text", text: "before tool" }, toolCall]));
+	block.setOpenToolsArgsComplete();
+	block.startTool("tool-1", "demo", toolCall.arguments);
+	block.setToolPartialResult("tool-1", { content: [{ type: "text", text: "partial output" }] });
 	assert.equal(chatContainer.children.length, 1);
 	assert.match(timeline.render(100).join("\n"), /partial output/);
-	composition.finishTool("tool-1", { content: [{ type: "text", text: "final output" }] }, false);
+	block.setToolResult("tool-1", { content: [{ type: "text", text: "final output" }] }, false);
 	const rendered = timeline.render(100).join("\n");
 	assert.match(rendered, /final output/);
 	assert.ok(rendered.includes(theme.getBgAnsi("toolSuccessBg")));
@@ -1119,10 +1119,10 @@ function testTimelineAssistantToolEventsUseExpandedSetting() {
 		getRegisteredToolDefinition: () => toolDefinition,
 	});
 
-	composition.startAssistantMessage(createAssistantMessage([toolCall]));
-	composition.finishAssistantMessage(createAssistantMessage([toolCall]));
-	composition.startTool("tool-1", "demo", toolCall.arguments);
-	composition.finishTool("tool-1", { content: [{ type: "text", text: "final output" }] }, false);
+	const block = composition.addAssistantMessageBlock(createAssistantMessage([toolCall]));
+	block.setOpenToolsArgsComplete();
+	block.startTool("tool-1", "demo", toolCall.arguments);
+	block.setToolResult("tool-1", { content: [{ type: "text", text: "final output" }] }, false);
 
 	assert.match(timeline.render(100).join("\n"), /expanded:true/);
 }
