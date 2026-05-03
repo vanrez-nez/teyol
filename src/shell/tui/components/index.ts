@@ -21,6 +21,12 @@ export {
 	type SerializedAssistantMessageBlock,
 } from "./timeline/assistant-message-block.js";
 export {
+	AssistantToolBlock,
+	type AssistantToolBlockOptions,
+	type AssistantToolBlockState,
+	type SerializedAssistantToolBlock,
+} from "./timeline/assistant-tool-block.js";
+export {
 	LoadedResourcesBlock,
 	type LoadedResourcesBlockOptions,
 	type LoadedResourcesBlockState,
@@ -30,7 +36,6 @@ export {
 export { TimelineBlock, type TimelineBlockEdges, type TimelineBlockOptions, type TimelineBlockPresentation } from "./timeline/base-block.js";
 export { loadAsciiLogo, LogoBlock, type LogoBlockOptions, type LogoBlockState, type SerializedLogoBlock } from "./timeline/logo-block.js";
 export { StartupBlock, type SerializedStartupBlock, type StartupBlockOptions, type StartupBlockState } from "./timeline/startup-block.js";
-export { ToolExecutionComponent, type ToolExecutionOptions } from "./tool-execution.js";
 export {
 	type SerializedUserMessageBlock,
 	UserMessageBlock,

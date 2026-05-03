@@ -20,7 +20,7 @@ import { LogoBlock } from "./components/timeline/logo-block.js";
 import { StartupBlock } from "./components/timeline/startup-block.js";
 import { UserMessageBlock } from "./components/timeline/user-message-block.js";
 import { SkillInvocationMessageComponent } from "./components/skill-invocation-message.js";
-import { ToolExecutionComponent } from "./components/tool-execution.js";
+import type { AssistantToolBlock } from "./components/timeline/assistant-tool-block.js";
 import type { ShellLayoutComponent } from "./layout.js";
 import type { CliState } from "./state/index.js";
 import { getUserMessageText } from "./display-helpers.js";
@@ -65,7 +65,7 @@ export class Timeline {
 	private blocks: TimelineBlock[] = [];
 	private streamingBlock: AssistantMessageBlock | undefined = undefined;
 	private streamingMessage: AssistantMessage | undefined = undefined;
-	private pendingTools = new Map<string, ToolExecutionComponent>();
+	private pendingTools = new Map<string, AssistantToolBlock>();
 	private lastStatusSpacer: Spacer | undefined = undefined;
 	private lastStatusText: Text | undefined = undefined;
 	private startupContent: Component | undefined = undefined;
@@ -316,11 +316,10 @@ export class Timeline {
 
     for (const message of sessionContext.messages) {
       if (message.role === "assistant") {
-        this.addMessage(message);
+        const assistantBlock = this.pushAssistantMessageBlock(message);
         for (const content of message.content) {
           if (content.type === "toolCall") {
-            const component = this.createToolComponent(content.name, content.id, content.arguments);
-            this.dependencies.chatContainer.addChild(component);
+            const component = assistantBlock.ensureToolBlock(content);
 
             if (message.stopReason === "aborted" || message.stopReason === "error") {
               let errorMessage: string;
@@ -397,8 +396,7 @@ export class Timeline {
       if (content.type === "toolCall") {
         const existing = this.pendingTools.get(content.id);
         if (!existing) {
-          const component = this.createToolComponent(content.name, content.id, content.arguments);
-          this.dependencies.chatContainer.addChild(component);
+          const component = this.streamingBlock.ensureToolBlock(content);
           this.pendingTools.set(content.id, component);
         } else {
           existing.updateArgs(content.arguments);
@@ -460,8 +458,7 @@ export class Timeline {
   startToolExecution(event: Extract<AgentSessionEvent, { type: "tool_execution_start" }>): void {
     let component = this.pendingTools.get(event.toolCallId);
     if (!component) {
-      component = this.createToolComponent(event.toolName, event.toolCallId, event.args);
-      this.dependencies.chatContainer.addChild(component);
+      component = this.getOrCreateToolBlock(event.toolCallId, event.toolName, event.args);
       this.pendingTools.set(event.toolCallId, component);
     }
     component.markExecutionStarted();
@@ -522,6 +519,9 @@ export class Timeline {
       if (isExpandable(block)) {
         block.setExpanded(expanded);
       }
+      if (block instanceof AssistantMessageBlock) {
+        block.setToolsExpanded(expanded);
+      }
     }
     for (const child of this.dependencies.chatContainer.children) {
       if (isExpandable(child)) {
@@ -542,23 +542,23 @@ export class Timeline {
     }
   }
 
-	private createToolComponent(toolName: string, toolCallId: string, args: unknown): ToolExecutionComponent {
-    const session = this.dependencies.getSession();
-    const component = new ToolExecutionComponent(
-      toolName,
-      toolCallId,
-      args,
-      {
-        showImages: session.settingsManager.getShowImages(),
-        imageWidthCells: session.settingsManager.getImageWidthCells(),
-      },
-      this.dependencies.getRegisteredToolDefinition(toolName),
-      this.dependencies.ui,
-      session.sessionManager.getCwd(),
-    );
-    component.setExpanded(this.dependencies.state.shell.$toolOutputExpanded.getState());
-    return component;
-	}
+  setToolImagesVisible(show: boolean): void {
+    for (const block of this.blocks) {
+      if (block instanceof AssistantMessageBlock) {
+        block.setToolImagesVisible(show);
+      }
+    }
+    this.dependencies.ui.requestRender();
+  }
+
+  setToolImageWidthCells(width: number): void {
+    for (const block of this.blocks) {
+      if (block instanceof AssistantMessageBlock) {
+        block.setToolImageWidthCells(width);
+      }
+    }
+    this.dependencies.ui.requestRender();
+  }
 
 	private ensureBlockHostMounted(): void {
 		if (!this.dependencies.chatContainer.children.includes(this.blockHost)) {
@@ -576,21 +576,59 @@ export class Timeline {
 		);
 	}
 
-	private pushAssistantMessageBlock(message: AssistantMessage): void {
-		this.pushBlock(
-			this.createAssistantMessageBlock({
-				message,
-				margin: { top: this.blocks.length > 0 ? 1 : 0 },
-			}),
-		);
+	private pushAssistantMessageBlock(message: AssistantMessage): AssistantMessageBlock {
+		const block = this.createAssistantMessageBlock({
+			message,
+			margin: { top: this.blocks.length > 0 ? 1 : 0 },
+		});
+		this.pushBlock(block);
+		return block;
 	}
 
 	private createAssistantMessageBlock(options: AssistantMessageBlockOptions = {}): AssistantMessageBlock {
+		const session = this.dependencies.getSession();
 		return new AssistantMessageBlock({
 			hideThinkingBlock: this.dependencies.state.shell.$hideThinkingBlock.getState(),
 			markdownTheme: this.dependencies.getMarkdownTheme(),
 			hiddenThinkingLabel: this.dependencies.state.shell.$hiddenThinkingLabel.getState(),
+			showImages: session.settingsManager.getShowImages(),
+			imageWidthCells: session.settingsManager.getImageWidthCells(),
+			getToolDefinition: (toolName) => this.dependencies.getRegisteredToolDefinition(toolName),
+			ui: this.dependencies.ui,
+			cwd: session.sessionManager.getCwd(),
 			...options,
 		});
+	}
+
+	private getOrCreateToolBlock(toolCallId: string, toolName: string, args: any): AssistantToolBlock {
+		const existing = this.findToolBlock(toolCallId);
+		if (existing) {
+			existing.updateArgs(args);
+			return existing;
+		}
+
+		if (!this.streamingBlock) {
+			this.streamingBlock = this.createAssistantMessageBlock({ margin: { top: this.blocks.length > 0 ? 1 : 0 } });
+			this.pushBlock(this.streamingBlock);
+		}
+
+		return this.streamingBlock.ensureToolBlock({
+			type: "toolCall",
+			id: toolCallId,
+			name: toolName,
+			arguments: args,
+		});
+	}
+
+	private findToolBlock(toolCallId: string): AssistantToolBlock | undefined {
+		for (const block of this.blocks) {
+			if (block instanceof AssistantMessageBlock) {
+				const toolBlock = block.getToolBlock(toolCallId);
+				if (toolBlock) {
+					return toolBlock;
+				}
+			}
+		}
+		return undefined;
 	}
 }

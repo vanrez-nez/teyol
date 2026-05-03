@@ -1,32 +1,48 @@
 import { Box, type Component, Container, getCapabilities, Image, Spacer, Text, type TUI } from "#tui/index.js";
 import type { ToolDefinition, ToolRenderContext } from "#shell/runtime/extensions/types.js";
-// Built-in tools and renderers mocked/removed for generic CLI
-const createAllToolDefinitions = (cwd: string): any => ({});
-const getRenderedTextOutput = (result: any, showImages: boolean): string => {
+import { theme } from "../../../theme/theme.js";
+import { TimelineBlock, type TimelineBlockOptions } from "./base-block.js";
+
+const createAllToolDefinitions = (_cwd: string): any => ({});
+const getRenderedTextOutput = (result: any, _showImages: boolean): string => {
 	if (!result) return "";
 	return result.content
-		.filter((c: any) => c.type === "text")
-		.map((c: any) => c.text)
+		.filter((content: any) => content.type === "text")
+		.map((content: any) => content.text)
 		.join("\n");
 };
-// convertToPng mocked for now
-const convertToPng = async (data: string, mimeType: string): Promise<{ data: string; mimeType: string } | undefined> => undefined;
-import { theme } from "../../theme/theme.js";
+const convertToPng = async (
+	_data: string,
+	_mimeType: string,
+): Promise<{ data: string; mimeType: string } | undefined> => undefined;
 
-export interface ToolExecutionOptions {
+export interface AssistantToolBlockOptions extends TimelineBlockOptions {
+	toolName: string;
+	toolCallId: string;
+	args: any;
 	showImages?: boolean;
 	imageWidthCells?: number;
+	toolDefinition?: ToolDefinition<any, any>;
+	ui: TUI;
+	cwd: string;
 }
 
-export class ToolExecutionComponent extends Container {
-	private contentBox: Box;
-	private contentText: Text;
-	private selfRenderContainer: Container;
+export interface AssistantToolBlockState {
+	toolName: string;
+	toolCallId: string;
+	args: any;
+}
+
+export interface SerializedAssistantToolBlock {
+	type: "assistant-tool";
+	id: string;
+	state: AssistantToolBlockState;
+}
+
+export class AssistantToolBlock extends TimelineBlock {
 	private callRendererComponent?: Component;
 	private resultRendererComponent?: Component;
 	private rendererState: any = {};
-	private imageComponents: Image[] = [];
-	private imageSpacers: Spacer[] = [];
 	private toolName: string;
 	private toolCallId: string;
 	private args: any;
@@ -48,42 +64,79 @@ export class ToolExecutionComponent extends Container {
 	private convertedImages: Map<number, { data: string; mimeType: string }> = new Map();
 	private hideComponent = false;
 
-	constructor(
-		toolName: string,
-		toolCallId: string,
-		args: any,
-		options: ToolExecutionOptions = {},
-		toolDefinition: ToolDefinition<any, any> | undefined,
-		ui: TUI,
-		cwd: string,
-	) {
-		super();
-		this.toolName = toolName;
-		this.toolCallId = toolCallId;
-		this.args = args;
-		this.toolDefinition = toolDefinition;
-		this.builtInToolDefinition = createAllToolDefinitions(cwd)[toolName];
+	constructor(options: AssistantToolBlockOptions) {
+		super("assistant-tool", options);
+		this.toolName = options.toolName;
+		this.toolCallId = options.toolCallId;
+		this.args = options.args;
+		this.toolDefinition = options.toolDefinition;
+		this.builtInToolDefinition = createAllToolDefinitions(options.cwd)[options.toolName];
 		this.showImages = options.showImages ?? true;
 		this.imageWidthCells = options.imageWidthCells ?? 60;
-		this.ui = ui;
-		this.cwd = cwd;
+		this.ui = options.ui;
+		this.cwd = options.cwd;
+	}
 
-		this.addChild(new Spacer(1));
+	getToolCallId(): string {
+		return this.toolCallId;
+	}
 
-		// Always create all shell variants. contentBox is used for default renderer-based composition.
-		// selfRenderContainer is used when the tool renders its own framing.
-		// contentText is reserved for generic fallback rendering when no tool definition exists.
-		this.contentBox = new Box(1, 1, (text: string) => theme.bg("toolPendingBg", text));
-		this.contentText = new Text("", 1, 1, (text: string) => theme.bg("toolPendingBg", text));
-		this.selfRenderContainer = new Container();
+	updateArgs(args: any): void {
+		this.args = args;
+		this.markDirty();
+	}
 
-		if (this.hasRendererDefinition()) {
-			this.addChild(this.getRenderShell() === "self" ? this.selfRenderContainer : this.contentBox);
-		} else {
-			this.addChild(this.contentText);
-		}
+	markExecutionStarted(): void {
+		this.executionStarted = true;
+		this.markDirty();
+		this.ui.requestRender();
+	}
 
-		this.updateDisplay();
+	setArgsComplete(): void {
+		this.argsComplete = true;
+		this.markDirty();
+		this.ui.requestRender();
+	}
+
+	updateResult(
+		result: {
+			content: Array<{ type: string; text?: string; data?: string; mimeType?: string }>;
+			details?: any;
+			isError: boolean;
+		},
+		isPartial = false,
+	): void {
+		this.result = result;
+		this.isPartial = isPartial;
+		this.markDirty();
+		this.maybeConvertImagesForKitty();
+	}
+
+	setExpanded(expanded: boolean): void {
+		this.expanded = expanded;
+		this.markDirty();
+	}
+
+	setShowImages(show: boolean): void {
+		this.showImages = show;
+		this.markDirty();
+	}
+
+	setImageWidthCells(width: number): void {
+		this.imageWidthCells = Math.max(1, Math.floor(width));
+		this.markDirty();
+	}
+
+	serialize(): SerializedAssistantToolBlock {
+		return {
+			type: "assistant-tool",
+			id: this.id,
+			state: {
+				toolName: this.toolName,
+				toolCallId: this.toolCallId,
+				args: this.args,
+			},
+		};
 	}
 
 	private getCallRenderer(): ToolDefinition<any, any>["renderCall"] | undefined {
@@ -152,88 +205,29 @@ export class ToolExecutionComponent extends Container {
 		return new Text(theme.fg("toolOutput", output), 0, 0);
 	}
 
-	updateArgs(args: any): void {
-		this.args = args;
-		this.updateDisplay();
-	}
-
-	markExecutionStarted(): void {
-		this.executionStarted = true;
-		this.updateDisplay();
-		this.ui.requestRender();
-	}
-
-	setArgsComplete(): void {
-		this.argsComplete = true;
-		this.updateDisplay();
-		this.ui.requestRender();
-	}
-
-	updateResult(
-		result: {
-			content: Array<{ type: string; text?: string; data?: string; mimeType?: string }>;
-			details?: any;
-			isError: boolean;
-		},
-		isPartial = false,
-	): void {
-		this.result = result;
-		this.isPartial = isPartial;
-		this.updateDisplay();
-		this.maybeConvertImagesForKitty();
-	}
-
 	private maybeConvertImagesForKitty(): void {
 		const caps = getCapabilities();
 		if (caps.images !== "kitty") return;
 		if (!this.result) return;
 
-		const imageBlocks = this.result.content.filter((c) => c.type === "image");
-		for (let i = 0; i < imageBlocks.length; i++) {
-			const img = imageBlocks[i];
-			if (!img.data || !img.mimeType) continue;
-			if (img.mimeType === "image/png") continue;
-			if (this.convertedImages.has(i)) continue;
+		const imageBlocks = this.result.content.filter((content) => content.type === "image");
+		for (let index = 0; index < imageBlocks.length; index++) {
+			const image = imageBlocks[index];
+			if (!image.data || !image.mimeType) continue;
+			if (image.mimeType === "image/png") continue;
+			if (this.convertedImages.has(index)) continue;
 
-			const index = i;
-			convertToPng(img.data, img.mimeType).then((converted) => {
+			convertToPng(image.data, image.mimeType).then((converted) => {
 				if (converted) {
 					this.convertedImages.set(index, converted);
-					this.updateDisplay();
+					this.markDirty();
 					this.ui.requestRender();
 				}
 			});
 		}
 	}
 
-	setExpanded(expanded: boolean): void {
-		this.expanded = expanded;
-		this.updateDisplay();
-	}
-
-	setShowImages(show: boolean): void {
-		this.showImages = show;
-		this.updateDisplay();
-	}
-
-	setImageWidthCells(width: number): void {
-		this.imageWidthCells = Math.max(1, Math.floor(width));
-		this.updateDisplay();
-	}
-
-	override invalidate(): void {
-		super.invalidate();
-		this.updateDisplay();
-	}
-
-	override render(width: number): string[] {
-		if (this.hideComponent) {
-			return [];
-		}
-		return super.render(width);
-	}
-
-	private updateDisplay(): void {
+	protected override rebuildChildren(): void {
 		const bgFn = this.isPartial
 			? (text: string) => theme.bg("toolPendingBg", text)
 			: this.result?.isError
@@ -242,12 +236,14 @@ export class ToolExecutionComponent extends Container {
 
 		let hasContent = false;
 		this.hideComponent = false;
+		this.addChild(new Spacer(1));
+
 		if (this.hasRendererDefinition()) {
-			const renderContainer = this.getRenderShell() === "self" ? this.selfRenderContainer : this.contentBox;
+			const renderContainer =
+				this.getRenderShell() === "self" ? new Container() : new Box(1, 1, (text: string) => theme.bg("toolPendingBg", text));
 			if (renderContainer instanceof Box) {
 				renderContainer.setBgFn(bgFn);
 			}
-			renderContainer.clear();
 
 			const callRenderer = this.getCallRenderer();
 			if (!callRenderer) {
@@ -295,50 +291,46 @@ export class ToolExecutionComponent extends Container {
 					}
 				}
 			}
+
+			if (hasContent) {
+				this.addChild(renderContainer);
+			}
 		} else {
-			this.contentText.setCustomBgFn(bgFn);
-			this.contentText.setText(this.formatToolExecution());
+			this.addChild(new Text(this.formatToolExecution(), 1, 1, bgFn));
 			hasContent = true;
 		}
 
-		for (const img of this.imageComponents) {
-			this.removeChild(img);
-		}
-		this.imageComponents = [];
-		for (const spacer of this.imageSpacers) {
-			this.removeChild(spacer);
-		}
-		this.imageSpacers = [];
-
+		let imageCount = 0;
 		if (this.result) {
-			const imageBlocks = this.result.content.filter((c) => c.type === "image");
+			const imageBlocks = this.result.content.filter((content) => content.type === "image");
 			const caps = getCapabilities();
-			for (let i = 0; i < imageBlocks.length; i++) {
-				const img = imageBlocks[i];
-				if (caps.images && this.showImages && img.data && img.mimeType) {
-					const converted = this.convertedImages.get(i);
-					const imageData = converted?.data ?? img.data;
-					const imageMimeType = converted?.mimeType ?? img.mimeType;
+			for (let index = 0; index < imageBlocks.length; index++) {
+				const image = imageBlocks[index];
+				if (caps.images && this.showImages && image.data && image.mimeType) {
+					const converted = this.convertedImages.get(index);
+					const imageData = converted?.data ?? image.data;
+					const imageMimeType = converted?.mimeType ?? image.mimeType;
 					if (caps.images === "kitty" && imageMimeType !== "image/png") continue;
 
-					const spacer = new Spacer(1);
-					this.addChild(spacer);
-					this.imageSpacers.push(spacer);
-					const imageComponent = new Image(
-						imageData,
-						imageMimeType,
-						{ fallbackColor: (s: string) => theme.fg("toolOutput", s) },
-						{ maxWidthCells: this.imageWidthCells },
+					this.addChild(new Spacer(1));
+					this.addChild(
+						new Image(imageData, imageMimeType, { fallbackColor: (text: string) => theme.fg("toolOutput", text) }, {
+							maxWidthCells: this.imageWidthCells,
+						}),
 					);
-					this.imageComponents.push(imageComponent);
-					this.addChild(imageComponent);
+					imageCount++;
 				}
 			}
 		}
 
-		if (this.hasRendererDefinition() && !hasContent && this.imageComponents.length === 0) {
+		if (this.hasRendererDefinition() && !hasContent && imageCount === 0) {
 			this.hideComponent = true;
+			this.clear();
 		}
+	}
+
+	protected override shouldRender(): boolean {
+		return !this.hideComponent;
 	}
 
 	private getTextOutput(): string {

@@ -35,7 +35,13 @@ import {
 	getUserMessageText,
 } from "../dist/shell/tui/display-helpers.js";
 import { Timeline } from "../dist/shell/tui/timeline.js";
-import { AssistantMessageBlock, LoadedResourcesBlock, TimelineBlock, UserMessageBlock } from "../dist/shell/tui/components/index.js";
+import {
+	AssistantMessageBlock,
+	AssistantToolBlock,
+	LoadedResourcesBlock,
+	TimelineBlock,
+	UserMessageBlock,
+} from "../dist/shell/tui/components/index.js";
 import { showLoadedResources } from "../dist/shell/tui/extensions/loaded-resources.js";
 import { buildHotkeyHelpMarkdown } from "../dist/shell/tui/hotkeys/help.js";
 import { Container, visibleWidth } from "../dist/tui/index.js";
@@ -535,6 +541,15 @@ function createTimelineForTest(options = {}) {
 		hiddenThinkingLabel: "thinking",
 		autoCompactEnabled: false,
 	});
+	const session = {
+		settingsManager: {
+			getShowImages: () => true,
+			getImageWidthCells: () => 60,
+		},
+		sessionManager: {
+			getCwd: () => repoRoot,
+		},
+	};
 	const timeline = new Timeline(
 		{
 			ui: {
@@ -547,7 +562,7 @@ function createTimelineForTest(options = {}) {
 			footer: {
 				invalidate() {},
 			},
-			getSession: () => undefined,
+			getSession: () => session,
 			getEditor: () => editor,
 			getMarkdownTheme: () => undefined,
 			getRegisteredToolDefinition: () => undefined,
@@ -593,8 +608,13 @@ function createShellLayoutRenderFixture(timelineLines, sidebarLines) {
 
 function testTimelineBlockBaseContract() {
 	class TestTimelineBlock extends TimelineBlock {
-		constructor(options = {}) {
+		constructor(lines = ["hello"], options = {}) {
 			super("test-block", { id: "block-1", ...options });
+			this.lines = lines;
+		}
+
+		rebuildChildren() {
+			this.addChild(staticComponent(this.lines));
 		}
 
 		serialize() {
@@ -607,7 +627,6 @@ function testTimelineBlockBaseContract() {
 	}
 
 	const block = new TestTimelineBlock();
-	block.addChild(staticComponent(["hello"]));
 	const rendered = block.render(80);
 	assert.equal(rendered.length, 1);
 	assert.ok(rendered[0].includes("hello"));
@@ -617,12 +636,10 @@ function testTimelineBlockBaseContract() {
 		state: { text: "hello" },
 	});
 
-	const padded = new TestTimelineBlock({ padding: { left: 2, top: 1, right: 1, bottom: 1 } });
-	padded.addChild(staticComponent(["x"]));
+	const padded = new TestTimelineBlock(["x"], { padding: { left: 2, top: 1, right: 1, bottom: 1 } });
 	assert.deepEqual(padded.render(8), ["        ", "  x     ", "        "]);
 
-	const bordered = new TestTimelineBlock({ border: { left: 1, top: 1, right: 1, bottom: 1 } });
-	bordered.addChild(staticComponent(["x"]));
+	const bordered = new TestTimelineBlock(["x"], { border: { left: 1, top: 1, right: 1, bottom: 1 } });
 	const borderedLines = bordered.render(5);
 	assert.equal(visibleWidth(borderedLines[0]), 5);
 	assert.ok(borderedLines[0].includes("┌"));
@@ -631,13 +648,11 @@ function testTimelineBlockBaseContract() {
 	assert.ok(borderedLines[2].includes("└"));
 	assert.ok(borderedLines[2].includes("┘"));
 
-	const margin = new TestTimelineBlock({ margin: { left: 1, top: 1, right: 1, bottom: 1 } });
-	margin.addChild(staticComponent(["x"]));
+	const margin = new TestTimelineBlock(["x"], { margin: { left: 1, top: 1, right: 1, bottom: 1 } });
 	assert.deepEqual(margin.render(5), ["     ", " x   ", "     "]);
 
 	initTheme("dark", false);
-	const background = new TestTimelineBlock({ background: "userMessageBg" });
-	background.addChild(staticComponent(["x"]));
+	const background = new TestTimelineBlock(["x"], { background: "userMessageBg" });
 	const [backgroundLine] = background.render(5);
 	assert.ok(backgroundLine.includes(theme.getBgAnsi("userMessageBg")));
 	assert.equal(visibleWidth(backgroundLine), 5);
@@ -647,7 +662,11 @@ function testTimelineBlockRendering() {
 	class TestTimelineBlock extends TimelineBlock {
 		constructor(id, text) {
 			super("test-block", { id });
-			this.addChild(staticComponent([text]));
+			this.text = text;
+		}
+
+		rebuildChildren() {
+			this.addChild(staticComponent([this.text]));
 		}
 
 		serialize() {
@@ -879,6 +898,33 @@ function testAssistantMessageBlockErrorsAndToolCalls() {
 	});
 	const rendered = toolCall.render(80).join("\n");
 	assert.doesNotMatch(rendered, /\x1b]133;A\x07/);
+	assert.match(rendered, /demo/);
+	assert.ok(toolCall.getToolBlock("tool-1"));
+}
+
+function testAssistantToolBlock() {
+	initTheme("dark", false);
+	const block = new AssistantToolBlock({
+		id: "tool-block-1",
+		toolName: "demo",
+		toolCallId: "tool-1",
+		args: { value: 1 },
+		ui: { requestRender() {} },
+		cwd: repoRoot,
+	});
+	assert.match(block.render(80).join("\n"), /demo/);
+	assert.match(block.render(80).join("\n"), /value/);
+	block.updateResult({ content: [{ type: "text", text: "tool output" }], isError: false });
+	assert.match(block.render(80).join("\n"), /tool output/);
+	assert.deepEqual(block.serialize(), {
+		type: "assistant-tool",
+		id: "tool-block-1",
+		state: {
+			toolName: "demo",
+			toolCallId: "tool-1",
+			args: { value: 1 },
+		},
+	});
 }
 
 function testTimelineAssistantMessageBlocks() {
@@ -902,6 +948,32 @@ function testTimelineStreamingAssistantBlock() {
 
 	timeline.removeStreamingAssistant();
 	assert.doesNotMatch(timeline.render(80).join("\n"), /second/);
+}
+
+function testTimelineAssistantToolEvents() {
+	initTheme("dark", false);
+	const { timeline, chatContainer } = createTimelineForTest();
+	const toolCall = { type: "toolCall", id: "tool-1", name: "demo", arguments: { query: "abc" } };
+	timeline.startAssistantMessage(createAssistantMessage([{ type: "text", text: "before tool" }]));
+	timeline.updateAssistantMessage(createAssistantMessage([{ type: "text", text: "before tool" }, toolCall]));
+	timeline.startToolExecution({ type: "tool_execution_start", toolCallId: "tool-1", toolName: "demo", args: toolCall.arguments });
+	timeline.updateToolExecution({
+		type: "tool_execution_update",
+		toolCallId: "tool-1",
+		toolName: "demo",
+		args: toolCall.arguments,
+		partialResult: { content: [{ type: "text", text: "partial output" }] },
+	});
+	assert.equal(chatContainer.children.length, 1);
+	assert.match(timeline.render(100).join("\n"), /partial output/);
+	timeline.finishToolExecution({
+		type: "tool_execution_end",
+		toolCallId: "tool-1",
+		toolName: "demo",
+		result: { content: [{ type: "text", text: "final output" }] },
+		isError: false,
+	});
+	assert.match(timeline.render(100).join("\n"), /final output/);
 }
 
 function testTimelineAssistantHiddenThinkingLabel() {
@@ -1123,8 +1195,10 @@ testTimelineLoadedResourcesPlacement();
 testAssistantMessageBlock();
 testAssistantMessageBlockThinkingVisibility();
 testAssistantMessageBlockErrorsAndToolCalls();
+testAssistantToolBlock();
 testTimelineAssistantMessageBlocks();
 testTimelineStreamingAssistantBlock();
+testTimelineAssistantToolEvents();
 testTimelineAssistantHiddenThinkingLabel();
 testUserMessageBlock();
 testTimelineUserMessageBlocks();

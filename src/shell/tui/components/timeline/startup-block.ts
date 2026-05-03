@@ -30,7 +30,6 @@ export class StartupBlock extends TimelineBlock {
 	private readonly compactInstructions: string;
 	private readonly compactOnboarding: string;
 	private readonly onboarding: string;
-	private readonly text: Text;
 
 	constructor(options: StartupBlockOptions) {
 		super("startup", { ...options, padding: { left: 1, ...options.padding } });
@@ -39,13 +38,15 @@ export class StartupBlock extends TimelineBlock {
 		this.compactInstructions = options.compactInstructions;
 		this.compactOnboarding = options.compactOnboarding;
 		this.onboarding = options.onboarding;
-		this.text = new Text(this.getText(), 0, 0);
-		this.addChild(this.text);
 	}
 
 	setExpanded(expanded: boolean): void {
 		this.expanded = expanded;
-		this.text.setText(this.getText());
+		this.markDirty();
+	}
+
+	protected override rebuildChildren(): void {
+		this.addChild(new Text(this.getText(), 0, 0));
 	}
 
 	serialize(): SerializedStartupBlock {

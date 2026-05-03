@@ -29,19 +29,20 @@ export interface LoadedResourcesBlockOptions extends TimelineBlockOptions {
 export class LoadedResourcesBlock extends TimelineBlock {
 	private readonly sections: LoadedResourcesSection[];
 	private expanded: boolean;
-	private readonly text: Text;
 
 	constructor(options: LoadedResourcesBlockOptions) {
 		super("loaded-resources", options);
 		this.sections = options.sections;
 		this.expanded = options.expanded;
-		this.text = new Text(this.getText(), 0, 0);
-		this.addChild(this.text);
 	}
 
 	setExpanded(expanded: boolean): void {
 		this.expanded = expanded;
-		this.text.setText(this.getText());
+		this.markDirty();
+	}
+
+	protected override rebuildChildren(): void {
+		this.addChild(new Text(this.getText(), 0, 0));
 	}
 
 	serialize(): SerializedLoadedResourcesBlock {

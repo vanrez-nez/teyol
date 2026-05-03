@@ -1,6 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { Container, truncateToWidth, visibleWidth } from "#tui/index.js";
+import type { Component } from "#tui/index.js";
 import { theme, type ThemeBg } from "../../../theme/theme.js";
+
+const OSC133_ZONE_START = "\x1b]133;A\x07";
+const OSC133_ZONE_END = "\x1b]133;B\x07";
+const OSC133_ZONE_FINAL = "\x1b]133;C\x07";
 
 export interface TimelineBlockEdges {
 	left?: number;
@@ -14,6 +19,11 @@ export interface TimelineBlockPresentation {
 	padding: Required<TimelineBlockEdges>;
 	border: Required<TimelineBlockEdges>;
 	background?: ThemeBg;
+	terminal: TimelineBlockTerminalPresentation;
+}
+
+export interface TimelineBlockTerminalPresentation {
+	promptBoundary: boolean;
 }
 
 export interface TimelineBlockOptions {
@@ -22,12 +32,17 @@ export interface TimelineBlockOptions {
 	padding?: TimelineBlockEdges;
 	border?: TimelineBlockEdges;
 	background?: ThemeBg;
+	terminal?: Partial<TimelineBlockTerminalPresentation>;
 }
 
 export abstract class TimelineBlock extends Container {
 	readonly id: string;
 	readonly type: string;
 	private readonly presentation: TimelineBlockPresentation;
+	protected dirty = true;
+	protected buffer: string[] = [];
+	private bufferWidth: number | undefined;
+	private parent: TimelineBlock | undefined;
 
 	protected constructor(type: string, options: TimelineBlockOptions = {}) {
 		super();
@@ -38,11 +53,69 @@ export abstract class TimelineBlock extends Container {
 			padding: normalizeEdges(options.padding),
 			border: normalizeEdges(options.border),
 			background: options.background,
+			terminal: {
+				promptBoundary: options.terminal?.promptBoundary ?? false,
+			},
 		};
+	}
+
+	override addChild(component: Component): void {
+		super.addChild(component);
+		if (component instanceof TimelineBlock) {
+			component.parent = this;
+		}
+		this.markDirty();
+	}
+
+	override removeChild(component: Component): void {
+		super.removeChild(component);
+		if (component instanceof TimelineBlock && component.parent === this) {
+			component.parent = undefined;
+		}
+		this.markDirty();
+	}
+
+	override clear(): void {
+		for (const child of this.children) {
+			if (child instanceof TimelineBlock && child.parent === this) {
+				child.parent = undefined;
+			}
+		}
+		super.clear();
+		this.markDirty();
+	}
+
+	override invalidate(): void {
+		for (const child of this.children) {
+			child.invalidate?.();
+		}
+		this.markDirty();
+	}
+
+	isDirty(): boolean {
+		return this.dirty;
+	}
+
+	markDirty(): void {
+		this.dirty = true;
+		this.parent?.markDirty();
 	}
 
 	override render(width: number): string[] {
 		const targetWidth = Math.max(1, width);
+		if (!this.dirty && this.bufferWidth === targetWidth) {
+			return this.buffer;
+		}
+
+		this.clear();
+		this.rebuildChildren();
+		if (!this.shouldRender()) {
+			this.buffer = [];
+			this.bufferWidth = targetWidth;
+			this.dirty = false;
+			return this.buffer;
+		}
+
 		const { margin, padding, border, background } = this.presentation;
 		const horizontalSpace = margin.left + margin.right + border.left + border.right + padding.left + padding.right;
 		const contentWidth = Math.max(1, targetWidth - horizontalSpace);
@@ -51,11 +124,25 @@ export abstract class TimelineBlock extends Container {
 		const paddedLines = applyPadding(contentLines, contentWidth, padding);
 		const borderedLines = applyBorder(paddedLines, border);
 		const backgroundLines = background ? applyBackground(borderedLines, background) : borderedLines;
-		return applyMargin(backgroundLines, targetWidth, margin);
+		const marginLines = applyMargin(backgroundLines, targetWidth, margin);
+		this.buffer = this.applyTerminalPresentation(marginLines);
+		this.bufferWidth = targetWidth;
+		this.dirty = false;
+		return this.buffer;
+	}
+
+	protected rebuildChildren(): void {}
+
+	protected shouldRender(): boolean {
+		return true;
 	}
 
 	protected renderContent(width: number): string[] {
 		return super.render(width);
+	}
+
+	protected shouldApplyTerminalBoundary(): boolean {
+		return this.presentation.terminal.promptBoundary && !this.hasTerminalBoundaryAncestor();
 	}
 
 	protected getPresentationState(): TimelineBlockPresentation {
@@ -63,6 +150,28 @@ export abstract class TimelineBlock extends Container {
 	}
 
 	abstract serialize(): object;
+
+	private hasTerminalBoundaryAncestor(): boolean {
+		let parent = this.parent;
+		while (parent) {
+			if (parent.presentation.terminal.promptBoundary) {
+				return true;
+			}
+			parent = parent.parent;
+		}
+		return false;
+	}
+
+	private applyTerminalPresentation(lines: string[]): string[] {
+		if (!this.shouldApplyTerminalBoundary() || lines.length === 0) {
+			return lines;
+		}
+
+		const wrapped = [...lines];
+		wrapped[0] = OSC133_ZONE_START + wrapped[0];
+		wrapped[wrapped.length - 1] = OSC133_ZONE_END + OSC133_ZONE_FINAL + wrapped[wrapped.length - 1];
+		return wrapped;
+	}
 }
 
 function normalizeEdges(edges: TimelineBlockEdges | undefined): Required<TimelineBlockEdges> {

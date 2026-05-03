@@ -296,6 +296,8 @@ export class InteractiveMode {
         getEditor: () => this.editor,
         refreshAutocomplete: () => this.setupAutocompleteProvider(),
         rebuildChatFromMessages: () => this.rebuildChatFromMessages(),
+        setToolImagesVisible: (show) => this.timeline.setToolImagesVisible(show),
+        setToolImageWidthCells: (width) => this.timeline.setToolImageWidthCells(width),
         updateEditorBorderColor: () => this.updateEditorBorderColor(),
       }),
       registerCommand(modelCommand, {

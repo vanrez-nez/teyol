@@ -3,7 +3,6 @@ import { type Component, type Container, type EditorComponent, Spacer, Text, typ
 import { setTheme, getAvailableThemes, theme } from "../../../theme/theme.js";
 import type { CustomEditor } from "../../components/custom-editor.js";
 import { SettingsSelectorComponent } from "../../components/commands/settings-selector.js";
-import { ToolExecutionComponent } from "../../components/tool-execution.js";
 import type { ShellLayoutComponent } from "../../layout.js";
 import type { CliState } from "../../state/index.js";
 import type { TuiCommand } from "../types.js";
@@ -19,6 +18,8 @@ export const settingsCommand: TuiCommand<{
 	getEditor(): EditorComponent;
 	refreshAutocomplete(): void;
 	rebuildChatFromMessages(): void;
+	setToolImagesVisible(show: boolean): void;
+	setToolImageWidthCells(width: number): void;
 	updateEditorBorderColor(): void;
 }> = {
 	name: "settings",
@@ -34,6 +35,8 @@ export const settingsCommand: TuiCommand<{
 		getEditor,
 		refreshAutocomplete,
 		rebuildChatFromMessages,
+		setToolImagesVisible,
+		setToolImageWidthCells,
 		updateEditorBorderColor,
 	}) {
 		const restoreEditor = () => {
@@ -74,19 +77,11 @@ export const settingsCommand: TuiCommand<{
 				},
 				onShowImagesChange: (enabled) => {
 					session.settingsManager.setShowImages(enabled);
-					for (const child of chatContainer.children) {
-						if (child instanceof ToolExecutionComponent) {
-							child.setShowImages(enabled);
-						}
-					}
+					setToolImagesVisible(enabled);
 				},
 				onImageWidthCellsChange: (width) => {
 					session.settingsManager.setImageWidthCells(width);
-					for (const child of chatContainer.children) {
-						if (child instanceof ToolExecutionComponent) {
-							child.setImageWidthCells(width);
-						}
-					}
+					setToolImageWidthCells(width);
 				},
 				onAutoResizeImagesChange: (enabled) => {
 					session.settingsManager.setImageAutoResize(enabled);
