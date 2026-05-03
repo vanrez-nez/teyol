@@ -7,8 +7,8 @@ import {
 	truncateToWidth,
 } from "#tui/index.js";
 import { LOG_LEVELS, type LogLevel } from "#shell/runtime/logger.js";
-import { theme } from "../../theme/theme.js";
-import { DynamicBorder } from "./dynamic-border.js";
+import { theme } from "../../../theme/theme.js";
+import { DynamicBorder } from "../dynamic-border.js";
 
 class LogLevelsList implements Component, Focusable {
 	private selectedIndex = 0;

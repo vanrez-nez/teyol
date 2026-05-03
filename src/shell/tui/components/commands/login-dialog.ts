@@ -1,12 +1,9 @@
 import { getOAuthProviders } from "#ai/oauth.js";
 import { Container, type Focusable, getKeybindings, Input, Spacer, Text, type TUI } from "#tui/index.js";
-import { exec } from "child_process";
-import { theme } from "../../theme/theme.js";
-import { DynamicBorder } from "./dynamic-border.js";
-import { keyHint } from "./keybinding-hints.js";
-
-// convertToPng mocked for now
-const convertToPng = async (data: string, mime: string) => undefined;
+import { exec } from "node:child_process";
+import { theme } from "../../../theme/theme.js";
+import { DynamicBorder } from "../dynamic-border.js";
+import { keyHint } from "../keybinding-hints.js";
 
 /**
  * Login dialog component - replaces editor during OAuth login flow

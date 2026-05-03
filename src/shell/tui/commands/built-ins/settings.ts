@@ -3,7 +3,7 @@ import { type Component, type Container, type EditorComponent, Spacer, Text, typ
 import { setTheme, getAvailableThemes, theme } from "../../../theme/theme.js";
 import { AssistantMessageComponent } from "../../components/assistant-message.js";
 import type { CustomEditor } from "../../components/custom-editor.js";
-import { SettingsSelectorComponent } from "../../components/settings-selector.js";
+import { SettingsSelectorComponent } from "../../components/commands/settings-selector.js";
 import { ToolExecutionComponent } from "../../components/tool-execution.js";
 import type { ShellLayoutComponent } from "../../layout.js";
 import type { CliState } from "../../state/index.js";

@@ -5,9 +5,9 @@ import { type AutocompleteItem, type Component, fuzzyFilter, Spacer, Text, type 
 import { theme } from "../../../theme/theme.js";
 import type { ShellLayoutComponent } from "../../layout.js";
 import type { CliState } from "../../state/index.js";
-import { type ModelAction, ModelActionsSelectorComponent } from "../../components/model-actions-selector.js";
-import { ModelSelectorComponent } from "../../components/model-selector.js";
-import { ScopedModelsSelectorComponent } from "../../components/scoped-models-selector.js";
+import { type ModelAction, ModelActionsSelectorComponent } from "../../components/commands/model-actions-selector.js";
+import { ModelSelectorComponent } from "../../components/commands/model-selector.js";
+import { ScopedModelsSelectorComponent } from "../../components/commands/scoped-models-selector.js";
 import type { TuiCommand } from "../types.js";
 
 const modelActions: Array<{ value: ModelAction; description: string }> = [

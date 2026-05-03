@@ -34,6 +34,7 @@ import {
 	getShortPath,
 	getUserMessageText,
 } from "../dist/shell/tui/display-helpers.js";
+import { TimelineBlock } from "../dist/shell/tui/components/index.js";
 import { buildHotkeyHelpMarkdown } from "../dist/shell/tui/hotkeys/help.js";
 import { visibleWidth } from "../dist/tui/index.js";
 
@@ -555,6 +556,29 @@ function createShellLayoutRenderFixture(timelineLines, sidebarLines) {
 	return layout;
 }
 
+function testTimelineBlockBaseContract() {
+	class TestTimelineBlock extends TimelineBlock {
+		constructor() {
+			super("test-block", { id: "block-1" });
+		}
+
+		serializeState() {
+			return { text: "hello" };
+		}
+	}
+
+	const block = new TestTimelineBlock();
+	block.addChild(staticComponent(["hello"]));
+	const rendered = block.render(80);
+	assert.equal(rendered.length, 1);
+	assert.ok(rendered[0].includes("hello"));
+	assert.deepEqual(block.serialize(), {
+		type: "test-block",
+		id: "block-1",
+		state: { text: "hello" },
+	});
+}
+
 function testShellLayoutNarrowWidth() {
 	initTheme("dark", false);
 	const layout = createShellLayoutRenderFixture(["timeline"], ["sidebar"]);
@@ -707,6 +731,7 @@ testSystemPrompt();
 testCliHelp();
 testUnknownFlagDiagnostics();
 testUiDescriptorContracts();
+testTimelineBlockBaseContract();
 testShellLayoutNarrowWidth();
 testShellLayoutWideWidth();
 testShellLayoutUsesTallerSide();

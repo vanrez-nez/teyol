@@ -10,9 +10,9 @@ import {
 	truncateToWidth,
 } from "#tui/index.js";
 import type { SessionTreeNode } from "#shell/runtime/session-manager.js";
-import { theme } from "../../theme/theme.js";
-import { DynamicBorder } from "./dynamic-border.js";
-import { keyHint, keyText } from "./keybinding-hints.js";
+import { theme } from "../../../theme/theme.js";
+import { DynamicBorder } from "../dynamic-border.js";
+import { keyHint, keyText } from "../keybinding-hints.js";
 
 /** Gutter info: position (displayIndent where connector was) and whether to show │ */
 interface GutterInfo {

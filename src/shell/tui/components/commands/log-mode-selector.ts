@@ -1,7 +1,7 @@
 import { Container, type SelectItem, SelectList, type SelectListLayoutOptions } from "#tui/index.js";
 import type { LogMode } from "#shell/runtime/logger.js";
-import { getSelectListTheme } from "../../theme/theme.js";
-import { DynamicBorder } from "./dynamic-border.js";
+import { getSelectListTheme } from "../../../theme/theme.js";
+import { DynamicBorder } from "../dynamic-border.js";
 
 const LOG_MODE_SELECT_LIST_LAYOUT: SelectListLayoutOptions = {
 	minPrimaryColumnWidth: 12,

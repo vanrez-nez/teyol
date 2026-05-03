@@ -12,8 +12,8 @@ import { type Component, type Container, Spacer, Text, type TUI } from "#tui/ind
 import { getAuthPath } from "../../../../config.js";
 import { theme } from "../../../theme/theme.js";
 import { ExtensionSelectorComponent } from "../../components/extension-selector.js";
-import { LoginDialogComponent } from "../../components/login-dialog.js";
-import { type AuthSelectorProvider, OAuthSelectorComponent } from "../../components/oauth-selector.js";
+import { LoginDialogComponent } from "../../components/commands/login-dialog.js";
+import { type AuthSelectorProvider, OAuthSelectorComponent } from "../../components/commands/oauth-selector.js";
 import type { ShellLayoutComponent } from "../../layout.js";
 import type { CliState } from "../../state/index.js";
 import { updateAvailableProviderCount } from "./model.js";

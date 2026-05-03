@@ -1,6 +1,6 @@
 import { type Component, Container, getKeybindings, Spacer, Text, truncateToWidth } from "#tui/index.js";
-import { theme } from "../../theme/theme.js";
-import { DynamicBorder } from "./dynamic-border.js";
+import { theme } from "../../../theme/theme.js";
+import { DynamicBorder } from "../dynamic-border.js";
 
 interface UserMessageItem {
 	id: string; // Entry ID in the session

@@ -2,9 +2,9 @@ import { type Model, modelsAreEqual } from "#ai/index.js";
 import { Container, type Focusable, fuzzyFilter, getKeybindings, Input, Spacer, Text, type TUI } from "#tui/index.js";
 import type { ModelRegistry } from "#shell/runtime/model-registry.js";
 import type { SettingsManager } from "#shell/runtime/settings-manager.js";
-import { theme } from "../../theme/theme.js";
-import { DynamicBorder } from "./dynamic-border.js";
-import { keyHint } from "./keybinding-hints.js";
+import { theme } from "../../../theme/theme.js";
+import { DynamicBorder } from "../dynamic-border.js";
+import { keyHint } from "../keybinding-hints.js";
 
 interface ModelItem {
   provider: string;
