@@ -1,12 +1,5 @@
 import fs from "node:fs";
-import {
-	configureLogger,
-	getLogFilePath,
-	getLogger,
-	type LogLevel,
-	type LogMode,
-	readLogTail,
-} from "#shell/runtime/logger.js";
+import { logger, type LogLevel, type LogMode } from "#logger";
 import type { AgentSession } from "#shell/runtime/agent-session.js";
 import { type AutocompleteItem, type Component, type Container, Spacer, Text, type TUI } from "#tui/index.js";
 import { isDevMode } from "../../../../config.js";
@@ -35,26 +28,9 @@ interface LogDependencies {
 	getEditor(): Component;
 }
 
-export function applyLoggerConfig(session: AgentSession): void {
-	const cfg = session.settingsManager.getLogSettings();
-	let sessionLogDir: string | undefined;
-	if (cfg.mode === "session") {
-		try {
-			const dir = session.sessionManager.getSessionDir();
-			if (typeof dir === "string" && dir.length > 0) {
-				sessionLogDir = dir;
-			}
-		} catch {
-			sessionLogDir = undefined;
-		}
-	}
-	configureLogger({
-		enabled: cfg.enabled,
-		mode: cfg.mode,
-		rotationLines: cfg.rotation_lines,
-		levels: cfg.level,
-		sessionLogDir,
-	});
+async function reloadLoggerSettings(session: AgentSession): Promise<void> {
+	await session.settingsManager.flush();
+	logger.reloadConfig();
 }
 
 function showInfo({ chatContainer, ui }: Pick<LogDependencies, "chatContainer" | "ui">, message: string): void {
@@ -64,22 +40,22 @@ function showInfo({ chatContainer, ui }: Pick<LogDependencies, "chatContainer" |
 }
 
 export function printLogFile({ chatContainer, ui }: Pick<LogDependencies, "chatContainer" | "ui">): void {
-	const logPath = getLogFilePath();
+	const logPath = logger.getFilePath();
 	const exists = fs.existsSync(logPath);
-	const tail = exists ? readLogTail(40) : "";
+	const tail = exists ? logger.readTail(40) : "";
 	chatContainer.addChild(new Spacer(1));
 	chatContainer.addChild(new Text(formatLogFileDisplay(logPath, exists, tail), 1, 1));
 	ui.requestRender();
 }
 
-function applyLogMode(dependencies: LogDependencies, mode: LogMode): void {
+async function applyLogMode(dependencies: LogDependencies, mode: LogMode): Promise<void> {
 	dependencies.session.settingsManager.setLogMode(mode);
-	applyLoggerConfig(dependencies.session);
-	getLogger().info("log.mode", { mode });
-	showInfo(dependencies, `Log mode set to ${mode}. File: ${getLogFilePath()}`);
+	await reloadLoggerSettings(dependencies.session);
+	logger.info("log.mode", { mode });
+	showInfo(dependencies, `Log mode set to ${mode}. File: ${logger.getFilePath()}`);
 }
 
-function applyLogRotationLines(dependencies: LogDependencies, arg: string): void {
+async function applyLogRotationLines(dependencies: LogDependencies, arg: string): Promise<void> {
 	const parsed = Number.parseInt(arg, 10);
 	if (!Number.isFinite(parsed) || parsed < 0) {
 		dependencies.chatContainer.addChild(new Spacer(1));
@@ -88,8 +64,8 @@ function applyLogRotationLines(dependencies: LogDependencies, arg: string): void
 		return;
 	}
 	dependencies.session.settingsManager.setLogRotationLines(parsed);
-	applyLoggerConfig(dependencies.session);
-	getLogger().info("log.rotation_lines", {
+	await reloadLoggerSettings(dependencies.session);
+	logger.info("log.rotation_lines", {
 		rotation_lines: dependencies.session.settingsManager.getLogRotationLines(),
 	});
 	showInfo(
@@ -107,7 +83,7 @@ function showLogModeSelector(dependencies: LogDependencies): void {
 		session.settingsManager.getLogMode(),
 		(mode) => {
 			done();
-			applyLogMode(dependencies, mode);
+			void applyLogMode(dependencies, mode);
 		},
 		() => {
 			done();
@@ -124,10 +100,11 @@ function showLogLevelsSelector(dependencies: LogDependencies): void {
 		session.settingsManager.getLogLevels(),
 		(levels: LogLevel[]) => {
 			session.settingsManager.setLogLevels(levels);
-			applyLoggerConfig(session);
-			getLogger().info("log.level", { level: levels });
-			done();
-			showInfo(dependencies, `Log levels set to: ${session.settingsManager.getLogLevels().join(", ") || "(none)"}`);
+			void reloadLoggerSettings(session).then(() => {
+				logger.info("log.level", { level: levels });
+				done();
+				showInfo(dependencies, `Log levels set to: ${session.settingsManager.getLogLevels().join(", ") || "(none)"}`);
+			});
 		},
 		() => {
 			done();
@@ -135,7 +112,7 @@ function showLogLevelsSelector(dependencies: LogDependencies): void {
 		},
 		(levels: LogLevel[]) => {
 			session.settingsManager.setLogLevels(levels);
-			applyLoggerConfig(session);
+			void reloadLoggerSettings(session);
 			ui.requestRender();
 		},
 	);
@@ -150,14 +127,14 @@ async function handleLogAction(dependencies: LogDependencies, action: LogAction)
 			return;
 		case "enable":
 			session.settingsManager.setLogEnabled(true);
-			applyLoggerConfig(session);
-			getLogger().info("log.enabled");
-			showInfo(dependencies, `Logging enabled. File: ${getLogFilePath()}`);
+			await reloadLoggerSettings(session);
+			logger.info("log.enabled");
+			showInfo(dependencies, `Logging enabled. File: ${logger.getFilePath()}`);
 			return;
 		case "disable":
-			getLogger().info("log.disabled");
+			logger.info("log.disabled");
 			session.settingsManager.setLogEnabled(false);
-			applyLoggerConfig(session);
+			await reloadLoggerSettings(session);
 			showInfo(dependencies, "Logging disabled.");
 			return;
 		case "mode":
@@ -224,19 +201,19 @@ export const logCommand: TuiCommand<LogDependencies> = {
 				return;
 			case "enable":
 				dependencies.session.settingsManager.setLogEnabled(true);
-				applyLoggerConfig(dependencies.session);
-				getLogger().info("log.enabled");
-				showInfo(dependencies, `Logging enabled. File: ${getLogFilePath()}`);
+				await reloadLoggerSettings(dependencies.session);
+				logger.info("log.enabled");
+				showInfo(dependencies, `Logging enabled. File: ${logger.getFilePath()}`);
 				return;
 			case "disable":
-				getLogger().info("log.disabled");
+				logger.info("log.disabled");
 				dependencies.session.settingsManager.setLogEnabled(false);
-				applyLoggerConfig(dependencies.session);
+				await reloadLoggerSettings(dependencies.session);
 				showInfo(dependencies, "Logging disabled.");
 				return;
 			case "mode":
 				if (actionArgument === "app" || actionArgument === "session") {
-					applyLogMode(dependencies, actionArgument);
+					await applyLogMode(dependencies, actionArgument);
 				} else {
 					showLogModeSelector(dependencies);
 				}
@@ -244,7 +221,7 @@ export const logCommand: TuiCommand<LogDependencies> = {
 			case "rotation_lines":
 			case "rotation-lines":
 				if (actionArgument.length > 0) {
-					applyLogRotationLines(dependencies, actionArgument);
+					await applyLogRotationLines(dependencies, actionArgument);
 				} else {
 					showInfo(
 						dependencies,

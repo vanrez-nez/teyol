@@ -1,5 +1,5 @@
 import { Container, type SelectItem, SelectList, type SelectListLayoutOptions } from "#tui/index.js";
-import type { LogMode } from "#shell/runtime/logger.js";
+import type { LogMode } from "#logger";
 import { getSelectListTheme } from "../../../theme/theme.js";
 import { DynamicBorder } from "../dynamic-border.js";
 

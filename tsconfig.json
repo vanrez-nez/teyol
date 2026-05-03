@@ -19,6 +19,7 @@
     "paths": {
       "#ai/*": ["./src/ai/*"],
       "#agent/*": ["./src/agent/*"],
+      "#logger": ["./src/logger.ts"],
       "#tui/*": ["./src/tui/*"],
       "#shell/*": ["./src/shell/*"],
       "#cli/*": ["src/cli/*"]

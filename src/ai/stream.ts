@@ -1,7 +1,7 @@
 import "./providers/register-builtins.js";
 
 import { getApiProvider } from "./api-registry.js";
-import { getAiLogger } from "./logger.js";
+import { logger } from "#logger";
 import type {
 	Api,
 	AssistantMessage,
@@ -16,7 +16,7 @@ import type {
 export { getEnvApiKey } from "./env-api-keys.js";
 
 function logRequest(model: Model<Api>, context: Context, options?: StreamOptions): void {
-	getAiLogger().debug("llm.request.context", {
+	logger.debug("llm.request.context", {
 		api: model.api,
 		provider: model.provider,
 		model: model.id,
@@ -39,7 +39,7 @@ function logFinalResponse(model: Model<Api>, stream: AssistantMessageEventStream
 	stream
 		.result()
 		.then((message) => {
-			getAiLogger().debug("llm.response.full", {
+			logger.debug("llm.response.full", {
 				api: model.api,
 				provider: model.provider,
 				model: model.id,
@@ -47,7 +47,7 @@ function logFinalResponse(model: Model<Api>, stream: AssistantMessageEventStream
 			});
 		})
 		.catch((error) => {
-			getAiLogger().error("llm.response.log_error", {
+			logger.error("llm.response.log_error", {
 				api: model.api,
 				provider: model.provider,
 				model: model.id,

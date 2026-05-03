@@ -14,6 +14,7 @@
   "imports": {
     "#ai/*": "./dist/ai/*",
     "#agent/*": "./dist/agent/*",
+    "#logger": "./dist/logger.js",
     "#tui/*": "./dist/tui/*",
     "#shell/*": "./dist/shell/*",
     "#cli/*": "./dist/cli/*"

@@ -10,7 +10,7 @@ import type {
   ChatCompletionSystemMessageParam,
   ChatCompletionToolMessageParam,
 } from "openai/resources/chat/completions.js";
-import { getAiLogger } from "../logger.js";
+import { logger } from "#logger";
 import { getEnvApiKey } from "../env-api-keys.js";
 import { calculateCost, supportsXhigh } from "../models.js";
 import type {
@@ -144,7 +144,7 @@ export const streamOpenAICompletions: StreamFunction<"openai-completions", OpenA
       if (nextParams !== undefined) {
         params = nextParams as OpenAI.Chat.Completions.ChatCompletionCreateParamsStreaming;
       }
-      getAiLogger().debug("provider.request", {
+      logger.debug("provider.request", {
         api: model.api,
         provider: model.provider,
         model: model.id,
@@ -160,7 +160,7 @@ export const streamOpenAICompletions: StreamFunction<"openai-completions", OpenA
         .create(params, requestOptions)
         .withResponse();
       const responseHeaders = headersToRecord(response.headers);
-      getAiLogger().debug("provider.response", {
+      logger.debug("provider.response", {
         api: model.api,
         provider: model.provider,
         model: model.id,
@@ -390,7 +390,7 @@ export const streamOpenAICompletions: StreamFunction<"openai-completions", OpenA
       stream.push({ type: "done", reason: output.stopReason, message: output });
       stream.end();
     } catch (error) {
-      getAiLogger().error("provider.error", {
+      logger.error("provider.error", {
         api: model.api,
         provider: model.provider,
         model: model.id,

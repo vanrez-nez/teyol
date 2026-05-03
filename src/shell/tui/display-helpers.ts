@@ -11,7 +11,7 @@ export interface ResourcePathItem {
 }
 
 export interface ScopeGroup {
-	scope: "user" | "project" | "path";
+	scope: "user" | "path";
 	paths: ResourcePathItem[];
 	packages: Map<string, ResourcePathItem[]>;
 }
@@ -193,13 +193,10 @@ export function getCompactExtensionLabels(extensions: ResourcePathItem[], homeDi
 
 export function getDisplaySourceInfo(sourceInfo?: SourceInfo): DisplaySourceInfo {
 	const source = sourceInfo?.source ?? "local";
-	const scope = sourceInfo?.scope ?? "project";
+	const scope = sourceInfo?.scope ?? "temporary";
 	if (source === "local") {
 		if (scope === "user") {
 			return { label: "user", color: "muted" };
-		}
-		if (scope === "project") {
-			return { label: "project", color: "muted" };
 		}
 		if (scope === "temporary") {
 			return { label: "path", scopeLabel: "temp", color: "muted" };
@@ -212,23 +209,21 @@ export function getDisplaySourceInfo(sourceInfo?: SourceInfo): DisplaySourceInfo
 	}
 
 	const scopeLabel =
-		scope === "user" ? "user" : scope === "project" ? "project" : scope === "temporary" ? "temp" : undefined;
+		scope === "user" ? "user" : scope === "temporary" ? "temp" : undefined;
 	return { label: source, scopeLabel, color: "accent" };
 }
 
 export function getScopeGroup(sourceInfo?: SourceInfo): ScopeGroup["scope"] {
 	const source = sourceInfo?.source ?? "local";
-	const scope = sourceInfo?.scope ?? "project";
+	const scope = sourceInfo?.scope ?? "temporary";
 	if (source === "cli" || scope === "temporary") return "path";
 	if (scope === "user") return "user";
-	if (scope === "project") return "project";
 	return "path";
 }
 
 export function buildScopeGroups(items: ResourcePathItem[]): ScopeGroup[] {
 	const groups: Record<ScopeGroup["scope"], ScopeGroup> = {
 		user: { scope: "user", paths: [], packages: new Map() },
-		project: { scope: "project", paths: [], packages: new Map() },
 		path: { scope: "path", paths: [], packages: new Map() },
 	};
 
@@ -246,9 +241,7 @@ export function buildScopeGroups(items: ResourcePathItem[]): ScopeGroup[] {
 		}
 	}
 
-	return [groups.project, groups.user, groups.path].filter(
-		(group) => group.paths.length > 0 || group.packages.size > 0,
-	);
+	return [groups.user, groups.path].filter((group) => group.paths.length > 0 || group.packages.size > 0);
 }
 
 export function formatScopeGroups(

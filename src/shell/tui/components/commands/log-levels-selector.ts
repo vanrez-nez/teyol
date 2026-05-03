@@ -6,7 +6,7 @@ import {
 	matchesKey,
 	truncateToWidth,
 } from "#tui/index.js";
-import { LOG_LEVELS, type LogLevel } from "#shell/runtime/logger.js";
+import { LOG_LEVELS, type LogLevel } from "#logger";
 import { theme } from "../../../theme/theme.js";
 import { DynamicBorder } from "../dynamic-border.js";
 

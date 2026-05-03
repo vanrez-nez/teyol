@@ -9,8 +9,9 @@ import {
 	statSync,
 	writeSync,
 } from "node:fs";
+import { homedir } from "node:os";
 import { dirname, join } from "node:path";
-import { getLogPath } from "../../config.js";
+import { getAgentDir } from "./config.js";
 
 export type LogLevel = "debug" | "info" | "warning" | "error";
 
@@ -21,26 +22,20 @@ export type LogMode = "session" | "app";
 export interface LogRecord {
 	ts: string;
 	level: LogLevel;
-	event: string;
+	message: string;
 	data?: unknown;
 }
 
-export interface Logger {
-	debug(event: string, data?: unknown): void;
-	info(event: string, data?: unknown): void;
-	warning(event: string, data?: unknown): void;
-	error(event: string, data?: unknown): void;
-}
-
-export interface LoggerConfig {
+interface LogSettings {
 	enabled: boolean;
 	mode: LogMode;
 	rotationLines: number;
 	levels: LogLevel[];
-	sessionLogDir?: string;
+	sessionDir?: string;
 }
 
 interface LoggerState {
+	settingsLoaded: boolean;
 	enabled: boolean;
 	levels: Set<LogLevel>;
 	path: string;
@@ -50,13 +45,6 @@ interface LoggerState {
 	writeFailed: boolean;
 }
 
-const NOOP_LOGGER: Logger = Object.freeze({
-	debug() {},
-	info() {},
-	warning() {},
-	error() {},
-});
-
 const SECRET_KEY_PATTERN =
 	/api[_-]?key|authorization|bearer|^token$|^cookie$|set-cookie|secret|password|access[_-]?token|refresh[_-]?token|x-api-key/i;
 
@@ -64,23 +52,87 @@ const MAX_STRING_BYTES = 4 * 1024;
 const STRING_KEEP_PREFIX = 256;
 const BASE64_MIN_LENGTH = 256;
 const BASE64_PATTERN = /^[A-Za-z0-9+/=\r\n]+$/;
-const FULL_STRING_DEBUG_EVENTS = new Set(["llm.request.context", "llm.response.full"]);
+const FULL_STRING_DEBUG_MESSAGES = new Set(["llm.request.context", "llm.response.full"]);
 
 let state: LoggerState = {
+	settingsLoaded: false,
 	enabled: false,
 	levels: new Set(["info"]),
-	path: getLogPath(),
+	path: join(getAgentDir(), "teyol.log"),
 	rotationLines: 10000,
 	lineCount: 0,
 	fd: undefined,
 	writeFailed: false,
 };
 
-function resolvePath(mode: LogMode, sessionLogDir: string | undefined): string {
-	if (mode === "session" && sessionLogDir) {
-		return join(sessionLogDir, "teyol.log");
+function getCurrentAgentDir(): string {
+	return getAgentDir();
+}
+
+function getSettingsPath(): string {
+	return join(getCurrentAgentDir(), "settings.json");
+}
+
+function getAppLogPath(): string {
+	return join(getCurrentAgentDir(), "teyol.log");
+}
+
+function resolveConfiguredPath(value: string | undefined): string | undefined {
+	if (!value) return undefined;
+	if (value === "~") return homedir();
+	if (value.startsWith("~/")) return join(homedir(), value.slice(2));
+	return value;
+}
+
+function resolvePath(mode: LogMode, sessionDir: string | undefined): string {
+	if (mode === "session") {
+		return join(sessionDir ?? join(getCurrentAgentDir(), "sessions"), "teyol.log");
 	}
-	return getLogPath();
+	return getAppLogPath();
+}
+
+function readSettings(): LogSettings {
+	if (!existsSync(getSettingsPath())) {
+		return {
+			enabled: false,
+			mode: "app",
+			rotationLines: 10000,
+			levels: ["info"],
+		};
+	}
+
+	try {
+		const settings = JSON.parse(readFileSync(getSettingsPath(), "utf-8")) as {
+			log?: {
+				enabled?: boolean;
+				mode?: LogMode;
+				rotation_lines?: number;
+				level?: LogLevel[];
+			};
+			sessionDir?: string;
+		};
+		const log = settings.log ?? {};
+		const levels = Array.isArray(log.level)
+			? log.level.filter((level): level is LogLevel => (LOG_LEVELS as ReadonlyArray<string>).includes(level))
+			: [];
+		return {
+			enabled: log.enabled ?? false,
+			mode: log.mode === "session" ? "session" : "app",
+			rotationLines:
+				typeof log.rotation_lines === "number" && Number.isFinite(log.rotation_lines)
+					? Math.max(0, Math.floor(log.rotation_lines))
+					: 10000,
+			levels: levels.length > 0 ? levels : ["info"],
+			sessionDir: resolveConfiguredPath(settings.sessionDir),
+		};
+	} catch {
+		return {
+			enabled: false,
+			mode: "app",
+			rotationLines: 10000,
+			levels: ["info"],
+		};
+	}
 }
 
 function countLines(path: string): number {
@@ -133,7 +185,6 @@ function rotateIfNeeded(): void {
 			const rolled = `${state.path}.1`;
 			if (existsSync(rolled)) {
 				try {
-					// Best-effort overwrite by truncating then renaming.
 					const fd = openSync(rolled, "w");
 					closeSync(fd);
 				} catch {
@@ -222,7 +273,6 @@ function redactValue(value: unknown, depth: number, fullStrings: boolean): unkno
 	if (Array.isArray(value)) {
 		return value.map((item) => redactValue(item, depth + 1, fullStrings));
 	}
-	// Headers-like objects (have entries() iterator yielding [string, string])
 	if (typeof (value as { entries?: unknown }).entries === "function" && !isPlainObject(value)) {
 		const out: Record<string, unknown> = {};
 		try {
@@ -237,11 +287,7 @@ function redactValue(value: unknown, depth: number, fullStrings: boolean): unkno
 	if (isPlainObject(value)) {
 		const out: Record<string, unknown> = {};
 		for (const [k, v] of Object.entries(value)) {
-			if (SECRET_KEY_PATTERN.test(k)) {
-				out[k] = "[REDACTED]";
-			} else {
-				out[k] = redactValue(v, depth + 1, fullStrings);
-			}
+			out[k] = SECRET_KEY_PATTERN.test(k) ? "[REDACTED]" : redactValue(v, depth + 1, fullStrings);
 		}
 		return out;
 	}
@@ -252,49 +298,18 @@ export function redact(value: unknown, depth = 0): unknown {
 	return redactValue(value, depth, false);
 }
 
-function emit(level: LogLevel, event: string, data?: unknown): void {
-	if (!state.enabled) return;
-	if (!state.levels.has(level)) return;
-	const fullStrings = level === "debug" && FULL_STRING_DEBUG_EVENTS.has(event);
-	const record: LogRecord = {
-		ts: new Date().toISOString(),
-		level,
-		event,
-		data: data === undefined ? undefined : redactValue(data, 0, fullStrings),
-	};
-	writeRecord(record);
-}
-
-const ACTIVE_LOGGER: Logger = {
-	debug: (event, data) => emit("debug", event, data),
-	info: (event, data) => emit("info", event, data),
-	warning: (event, data) => emit("warning", event, data),
-	error: (event, data) => emit("error", event, data),
-};
-
-export function getLogger(): Logger {
-	return state.enabled ? ACTIVE_LOGGER : NOOP_LOGGER;
-}
-
-export function isLoggerEnabled(): boolean {
-	return state.enabled;
-}
-
-export function getLogFilePath(): string {
-	return state.path;
-}
-
-export function configureLogger(config: LoggerConfig): void {
-	const newPath = resolvePath(config.mode, config.sessionLogDir);
+function applySettings(settings: LogSettings): void {
+	const newPath = resolvePath(settings.mode, settings.sessionDir);
 	const pathChanged = newPath !== state.path;
 	if (pathChanged) {
 		closeFd();
 	}
 	state.path = newPath;
-	state.rotationLines = Math.max(0, Math.floor(config.rotationLines));
-	state.levels = new Set(config.levels.length > 0 ? config.levels : ["info"]);
-	state.enabled = !!config.enabled;
+	state.rotationLines = settings.rotationLines;
+	state.levels = new Set(settings.levels);
+	state.enabled = settings.enabled;
 	state.writeFailed = false;
+	state.settingsLoaded = true;
 	if (state.enabled) {
 		try {
 			mkdirSync(dirname(state.path), { recursive: true });
@@ -307,40 +322,83 @@ export function configureLogger(config: LoggerConfig): void {
 	}
 }
 
-export function shutdownLogger(): void {
-	closeFd();
+function ensureSettingsLoaded(): void {
+	if (state.settingsLoaded) return;
+	applySettings(readSettings());
 }
 
-/** Read the tail of the current log file. Returns up to `maxLines` of the most recent records. */
-export function readLogTail(maxLines = 200): string {
-	if (!existsSync(state.path)) return "";
-	try {
-		const stat = statSync(state.path);
-		const readBytes = Math.min(stat.size, 256 * 1024);
-		const buf = Buffer.alloc(readBytes);
-		const fd = openSync(state.path, "r");
-		try {
-			const start = Math.max(0, stat.size - readBytes);
-			readSync(fd, buf, 0, readBytes, start);
-		} finally {
-			closeSync(fd);
-		}
-		const text = buf.toString("utf-8");
-		const lines = text.split("\n").filter((l) => l.length > 0);
-		return lines.slice(-maxLines).join("\n");
-	} catch {
-		return "";
-	}
+function log(level: LogLevel, message: string, data?: unknown): void {
+	ensureSettingsLoaded();
+	if (!state.enabled) return;
+	if (!state.levels.has(level)) return;
+	const fullStrings = level === "debug" && FULL_STRING_DEBUG_MESSAGES.has(message);
+	writeRecord({
+		ts: new Date().toISOString(),
+		level,
+		message,
+		data: data === undefined ? undefined : redactValue(data, 0, fullStrings),
+	});
 }
+
+export const logger = {
+	debug(message: string, data?: unknown): void {
+		log("debug", message, data);
+	},
+	info(message: string, data?: unknown): void {
+		log("info", message, data);
+	},
+	warning(message: string, data?: unknown): void {
+		log("warning", message, data);
+	},
+	error(message: string, data?: unknown): void {
+		log("error", message, data);
+	},
+	reloadConfig(): void {
+		applySettings(readSettings());
+	},
+	isEnabled(): boolean {
+		ensureSettingsLoaded();
+		return state.enabled;
+	},
+	getFilePath(): string {
+		ensureSettingsLoaded();
+		return state.path;
+	},
+	readTail(maxLines = 200): string {
+		ensureSettingsLoaded();
+		if (!existsSync(state.path)) return "";
+		try {
+			const stat = statSync(state.path);
+			const readBytes = Math.min(stat.size, 256 * 1024);
+			const buf = Buffer.alloc(readBytes);
+			const fd = openSync(state.path, "r");
+			try {
+				const start = Math.max(0, stat.size - readBytes);
+				readSync(fd, buf, 0, readBytes, start);
+			} finally {
+				closeSync(fd);
+			}
+			const text = buf.toString("utf-8");
+			const lines = text.split("\n").filter((line) => line.length > 0);
+			return lines.slice(-maxLines).join("\n");
+		} catch {
+			return "";
+		}
+	},
+	shutdown(): void {
+		closeFd();
+	},
+};
 
 export const _internal = {
 	getState: () => state,
 	resetForTests: () => {
 		closeFd();
 		state = {
+			settingsLoaded: false,
 			enabled: false,
 			levels: new Set(["info"]),
-			path: getLogPath(),
+			path: getAppLogPath(),
 			rotationLines: 10000,
 			lineCount: 0,
 			fd: undefined,

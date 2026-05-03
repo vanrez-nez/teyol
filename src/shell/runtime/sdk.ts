@@ -1,7 +1,5 @@
 import { join } from "node:path";
-import { setAgentLogger } from "#agent/logger.js";
 import { Agent, type AgentMessage, type ThinkingLevel } from "#agent/index.js";
-import { setAiLogger } from "#ai/logger.js";
 import { type Message, type Model, streamSimple } from "#ai/index.js";
 import { getAgentDir } from "../../config.js";
 import { AgentSession } from "./agent-session.js";
@@ -16,7 +14,6 @@ import type { ResourceLoader } from "./resource-loader.js";
 import { DefaultResourceLoader } from "./resource-loader.js";
 import { getDefaultSessionDir, SessionManager } from "./session-manager.js";
 import { SettingsManager } from "./settings-manager.js";
-import { getLogger } from "./logger.js";
 import { isInstallTelemetryEnabled } from "../../utils/telemetry.js";
 import { time } from "./timings.js";
 
@@ -156,10 +153,6 @@ function getAttributionHeaders(
  * ```
  */
 export async function createAgentSession(options: CreateAgentSessionOptions = {}): Promise<CreateAgentSessionResult> {
-	const logger = getLogger();
-	setAgentLogger(logger);
-	setAiLogger(logger);
-
 	const cwd = options.cwd ?? options.sessionManager?.getCwd() ?? process.cwd();
 	const agentDir = options.agentDir ?? getDefaultAgentDir();
 	let resourceLoader = options.resourceLoader;

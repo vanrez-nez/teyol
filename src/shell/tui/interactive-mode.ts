@@ -25,7 +25,7 @@ import {
   getAgentDir,
   VERSION,
 } from "../../config.js";
-import { getLogger } from "#shell/runtime/logger.js";
+import { logger } from "#logger";
 import type { ExtensionCommandContextActions } from "#shell/runtime/extensions/index.js";
 import type { AgentSessionEvent } from "#shell/runtime/agent-session.js";
 import { type AppKeybinding, KeybindingsManager } from "#shell/runtime/keybindings.js";
@@ -54,7 +54,7 @@ import { dispatchBuiltInCommand } from "./commands/built-in.js";
 import { buildAutocomplete } from "./commands/autocomplete.js";
 import { exitCommand } from "./commands/built-ins/exit.js";
 import { hotkeysCommand } from "./commands/built-ins/hotkeys.js";
-import { applyLoggerConfig, logCommand, printLogFile } from "./commands/built-ins/log.js";
+import { logCommand, printLogFile } from "./commands/built-ins/log.js";
 import { loginCommand } from "./commands/built-ins/login.js";
 import { logoutCommand } from "./commands/built-ins/logout.js";
 import {
@@ -439,8 +439,7 @@ export class InteractiveMode {
   async init(): Promise<void> {
     if (this.isInitialized) return;
 
-    applyLoggerConfig(this.runtimeHost.session);
-    getLogger().info("startup", { version: this.version, cwd: this.runtimeHost.session.sessionManager.getCwd() });
+    logger.info("startup", { version: this.version, cwd: this.runtimeHost.session.sessionManager.getCwd() });
 
     this.registerSignalHandlers();
 
@@ -896,7 +895,7 @@ export class InteractiveMode {
       if (!text) return;
 
       if (text.startsWith("/")) {
-        getLogger().info("slash.dispatch", { text });
+        logger.info("slash.dispatch", { text });
       }
 
       const commandHandled = await dispatchBuiltInCommand(text, this.getBuiltInCommands());

@@ -1,4 +1,5 @@
-import { Type, type ExtensionAPI } from "@teyol";
+import { Type } from "#ai/index.js";
+import type { ExtensionAPI } from "#shell/runtime/extensions/index.js";
 
 interface HelpSection {
 	document: string;
@@ -35,10 +36,10 @@ const SECTIONS: HelpSection[] = [
 	{
 		document: "Teyol Extensions",
 		title: "Extensions",
-		keywords: ["extensions", "project", "global", "autoload", "register"],
+		keywords: ["extensions", "user", "internal", "autoload", "register"],
 		description: "Extensions are TypeScript or JavaScript modules loaded from Teyol extension directories.",
 		content:
-			"Project-local extensions live under .teyol/extensions. An extension exports a default factory function that receives the Teyol extension API and can register tools, commands, shortcuts, flags, event handlers, message renderers, providers, and UI behavior.",
+			"Internally shipped extensions are loaded from the Teyol package, and user extensions are loaded from the app data directory or explicit configured paths. An extension exports a default factory function that receives the Teyol extension API and can register tools, commands, shortcuts, flags, event handlers, message renderers, providers, and UI behavior.",
 	},
 	{
 		document: "Teyol Extensions",

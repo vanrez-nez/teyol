@@ -28,7 +28,7 @@ function getAutocompleteSourceTag(sourceInfo?: SourceInfo): string | undefined {
 		return undefined;
 	}
 
-	const scopePrefix = sourceInfo.scope === "user" ? "u" : sourceInfo.scope === "project" ? "p" : "t";
+	const scopePrefix = sourceInfo.scope === "user" ? "u" : "t";
 	const source = sourceInfo.source.trim();
 
 	if (source === "auto" || source === "local" || source === "cli") {

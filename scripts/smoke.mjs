@@ -45,10 +45,13 @@ import {
 import { showLoadedResources } from "../dist/shell/tui/extensions/loaded-resources.js";
 import { buildHotkeyHelpMarkdown } from "../dist/shell/tui/hotkeys/help.js";
 import { Container, visibleWidth } from "../dist/tui/index.js";
+import { logger } from "../dist/logger.js";
 
 const repoRoot = process.cwd();
 const cliRoot = mkdtempSync(join(tmpdir(), "teyol-cli-"));
 const cliEnv = { ...process.env, TEYOL_AGENT_DIR: join(cliRoot, "agent") };
+process.env.TEYOL_AGENT_DIR = cliEnv.TEYOL_AGENT_DIR;
+logger.reloadConfig();
 
 function makeServices(name) {
 	const root = mkdtempSync(join(tmpdir(), `teyol-${name}-`));
@@ -175,6 +178,41 @@ export default function extension(teyol) {
 	assert.deepEqual(result.errors, []);
 	assert.equal(result.extensions.length, 1);
 	assert.deepEqual(Array.from(result.extensions[0].tools.keys()), ["alias_test"]);
+}
+
+async function testShippedExtensionsLoadThroughResourceLoader() {
+	const root = mkdtempSync(join(tmpdir(), "teyol-shipped-extension-"));
+	const agentDir = join(root, "agent");
+	const resourceLoader = new DefaultResourceLoader({
+		cwd: root,
+		agentDir,
+		settingsManager: SettingsManager.create(root, agentDir),
+	});
+
+	await resourceLoader.reload();
+
+	const extensionsResult = resourceLoader.getExtensions();
+	const toolNames = extensionsResult.extensions.flatMap((extension) => Array.from(extension.tools.keys()));
+	assert.deepEqual(extensionsResult.errors, []);
+	assert.ok(toolNames.includes("teyol_help"));
+}
+
+async function testNoExtensionsDisablesShippedExtensions() {
+	const root = mkdtempSync(join(tmpdir(), "teyol-no-shipped-extension-"));
+	const agentDir = join(root, "agent");
+	const resourceLoader = new DefaultResourceLoader({
+		cwd: root,
+		agentDir,
+		settingsManager: SettingsManager.create(root, agentDir),
+		noExtensions: true,
+	});
+
+	await resourceLoader.reload();
+
+	const toolNames = resourceLoader
+		.getExtensions()
+		.extensions.flatMap((extension) => Array.from(extension.tools.keys()));
+	assert.ok(!toolNames.includes("teyol_help"));
 }
 
 function testSystemPrompt() {
@@ -455,18 +493,18 @@ function testDisplayHelperContracts() {
 	assert.equal(formatContextPath("/Users/test/project/docs/notes.md", cwd, homeDir), "docs/notes.md");
 	assert.equal(formatContextPath("/Users/test/other/notes.md", cwd, homeDir), "~/other/notes.md");
 
-	const packageSource = { source: "npm:@scope/pkg", scope: "project", path: "/tmp/pkg", baseDir: "/tmp/pkg" };
+	const packageSource = { source: "npm:@scope/pkg", scope: "user", path: "/tmp/pkg", baseDir: "/tmp/pkg" };
 	assert.equal(getShortPath("/tmp/pkg/extensions/calendar/index.ts", packageSource, homeDir), "extensions/calendar/index.ts");
 	assert.deepEqual(getCompactExtensionLabels([{ path: "/tmp/pkg/extensions/calendar/index.ts", sourceInfo: packageSource }], homeDir), [
 		"@scope/pkg:calendar",
 	]);
 
 	const groups = buildScopeGroups([
-		{ path: "/Users/test/project/a.md", sourceInfo: { source: "local", scope: "project", path: "/Users/test/project/a.md" } },
+		{ path: "/Users/test/project/a.md", sourceInfo: { source: "local", scope: "temporary", path: "/Users/test/project/a.md" } },
 		{ path: "/Users/test/b.md", sourceInfo: { source: "local", scope: "user", path: "/Users/test/b.md" } },
 		{ path: "/tmp/pkg/extensions/calendar/index.ts", sourceInfo: packageSource },
 	]);
-	assert.deepEqual(groups.map((group) => group.scope), ["project", "user"]);
+	assert.deepEqual(groups.map((group) => group.scope), ["user", "path"]);
 	assert.equal(groups[0].packages.get("npm:@scope/pkg").length, 1);
 
 	const diagnostics = formatDiagnostics(
@@ -485,7 +523,7 @@ function testDisplayHelperContracts() {
 		homeDir,
 	);
 	assert.match(diagnostics, /"calendar" collision/);
-	assert.match(diagnostics, /npm:@scope\/pkg \(project\) extensions\/calendar\/index.ts/);
+	assert.match(diagnostics, /npm:@scope\/pkg \(user\) extensions\/calendar\/index.ts/);
 	assert.match(diagnostics, /skipped/);
 
 	assert.equal(
@@ -1176,6 +1214,8 @@ await testExtensionToolsActiveByDefault();
 await testNoToolsDisablesExtensionTools();
 await testToolAllowlist();
 await testExtensionModuleCanImportTeyol();
+await testShippedExtensionsLoadThroughResourceLoader();
+await testNoExtensionsDisablesShippedExtensions();
 await testLocalOllamaCompactionWithoutApiKey();
 await testBuiltInCommandDispatch();
 await testInteractiveAutocompleteContracts();

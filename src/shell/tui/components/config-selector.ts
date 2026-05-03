@@ -2,7 +2,7 @@
  * TUI component for managing package resources (enable/disable)
  */
 
-import { basename, dirname, join, relative } from "node:path";
+import { basename, dirname, relative } from "node:path";
 import {
 	type Component,
 	Container,
@@ -14,7 +14,6 @@ import {
 	truncateToWidth,
 	visibleWidth,
 } from "#tui/index.js";
-import { CONFIG_DIR_NAME } from "../../../config.js";
 import type { PathMetadata, ResolvedPaths, ResolvedResource } from "#shell/runtime/package-manager.js";
 import type { PackageSource, SettingsManager } from "#shell/runtime/settings-manager.js";
 import { theme } from "../../theme/theme.js";
@@ -49,7 +48,7 @@ interface ResourceSubgroup {
 interface ResourceGroup {
 	key: string;
 	label: string;
-	scope: "user" | "project" | "temporary";
+	scope: "user" | "temporary";
 	origin: "package" | "top-level";
 	source: string;
 	subgroups: ResourceSubgroup[];
@@ -61,9 +60,9 @@ function getGroupLabel(metadata: PathMetadata): string {
 	}
 	// Top-level resources
 	if (metadata.source === "auto") {
-		return metadata.scope === "user" ? "User (~/.teyol/agent/)" : "Project (.teyol/)";
+		return "User (~/.teyol/agent/)";
 	}
-	return metadata.scope === "user" ? "User settings" : "Project settings";
+	return "User settings";
 }
 
 function buildGroups(resolved: ResolvedPaths): ResourceGroup[] {
@@ -423,9 +422,7 @@ class ResourceList implements Component, Focusable {
 	}
 
 	private toggleTopLevelResource(item: ResourceItem, enabled: boolean): void {
-		const scope = item.metadata.scope as "user" | "project";
-		const settings =
-			scope === "project" ? this.settingsManager.getProjectSettings() : this.settingsManager.getGlobalSettings();
+		const settings = this.settingsManager.getGlobalSettings();
 
 		const arrayKey = item.resourceType as "extensions" | "skills" | "prompts" | "themes";
 		const current = (settings[arrayKey] ?? []) as string[];
@@ -447,33 +444,19 @@ class ResourceList implements Component, Focusable {
 			updated.push(disablePattern);
 		}
 
-		if (scope === "project") {
-			if (arrayKey === "extensions") {
-				this.settingsManager.setProjectExtensionPaths(updated);
-			} else if (arrayKey === "skills") {
-				this.settingsManager.setProjectSkillPaths(updated);
-			} else if (arrayKey === "prompts") {
-				this.settingsManager.setProjectPromptTemplatePaths(updated);
-			} else if (arrayKey === "themes") {
-				this.settingsManager.setProjectThemePaths(updated);
-			}
-		} else {
-			if (arrayKey === "extensions") {
-				this.settingsManager.setExtensionPaths(updated);
-			} else if (arrayKey === "skills") {
-				this.settingsManager.setSkillPaths(updated);
-			} else if (arrayKey === "prompts") {
-				this.settingsManager.setPromptTemplatePaths(updated);
-			} else if (arrayKey === "themes") {
-				this.settingsManager.setThemePaths(updated);
-			}
+		if (arrayKey === "extensions") {
+			this.settingsManager.setExtensionPaths(updated);
+		} else if (arrayKey === "skills") {
+			this.settingsManager.setSkillPaths(updated);
+		} else if (arrayKey === "prompts") {
+			this.settingsManager.setPromptTemplatePaths(updated);
+		} else if (arrayKey === "themes") {
+			this.settingsManager.setThemePaths(updated);
 		}
 	}
 
 	private togglePackageResource(item: ResourceItem, enabled: boolean): void {
-		const scope = item.metadata.scope as "user" | "project";
-		const settings =
-			scope === "project" ? this.settingsManager.getProjectSettings() : this.settingsManager.getGlobalSettings();
+		const settings = this.settingsManager.getGlobalSettings();
 
 		const packages = [...(settings.packages ?? [])] as PackageSource[];
 		const pkgIndex = packages.findIndex((pkg) => {
@@ -522,20 +505,15 @@ class ResourceList implements Component, Focusable {
 			packages[pkgIndex] = (pkg as { source: string }).source;
 		}
 
-		if (scope === "project") {
-			this.settingsManager.setProjectPackages(packages);
-		} else {
-			this.settingsManager.setPackages(packages);
-		}
+		this.settingsManager.setPackages(packages);
 	}
 
-	private getTopLevelBaseDir(scope: "user" | "project"): string {
-		return scope === "project" ? join(this.cwd, CONFIG_DIR_NAME) : this.agentDir;
+	private getTopLevelBaseDir(): string {
+		return this.agentDir;
 	}
 
 	private getResourcePattern(item: ResourceItem): string {
-		const scope = item.metadata.scope as "user" | "project";
-		const baseDir = this.getTopLevelBaseDir(scope);
+		const baseDir = this.getTopLevelBaseDir();
 		return relative(baseDir, item.path);
 	}
 

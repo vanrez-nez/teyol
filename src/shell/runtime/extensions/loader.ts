@@ -17,10 +17,10 @@ import type { KeyId } from "#tui/index.js";
 import * as _bundledTypebox from "@sinclair/typebox";
 import * as _bundledTypeboxCompile from "@sinclair/typebox/compiler";
 import * as _bundledTypeboxValue from "@sinclair/typebox/value";
-import { CONFIG_DIR_NAME, getAgentDir, isBunBinary } from "../../../config.js";
+import { getAgentDir, getUserExtensionsDir, isBunBinary } from "../../../config.js";
 import * as _bundledAiCli from "../../../index.js";
 import { createEventBus, type EventBus } from "#shell/runtime/event-bus.js";
-import { getLogger } from "#shell/runtime/logger.js";
+import { logger } from "#logger";
 import type { ExecOptions } from "#shell/runtime/exec.js";
 import { execCommand } from "#shell/runtime/exec.js";
 import { createSyntheticSourceInfo } from "#shell/runtime/source-info.js";
@@ -416,13 +416,13 @@ export async function loadExtensions(paths: string[], cwd: string, eventBus?: Ev
 		const { extension, error } = await loadExtension(extPath, cwd, resolvedEventBus, runtime);
 
 		if (error) {
-			getLogger().error("extension.error", { path: extPath, error });
+			logger.error("extension.error", { path: extPath, error });
 			errors.push({ path: extPath, error });
 			continue;
 		}
 
 		if (extension) {
-			getLogger().info("extension.loaded", {
+			logger.info("extension.loaded", {
 				path: extPath,
 				resolvedPath: extension.resolvedPath,
 				tools: Array.from(extension.tools.keys()),
@@ -514,7 +514,7 @@ function resolveExtensionEntries(dir: string): string[] | null {
  *
  * No recursion beyond one level. Complex packages must use package.json manifest.
  */
-function discoverExtensionsInDir(dir: string): string[] {
+export function discoverExtensionEntriesInDir(dir: string): string[] {
 	if (!fs.existsSync(dir)) {
 		return [];
 	}
@@ -570,15 +570,11 @@ export async function discoverAndLoadExtensions(
 		}
 	};
 
-	// 1. Project-local extensions: cwd/${CONFIG_DIR_NAME}/extensions/
-	const localExtDir = path.join(cwd, CONFIG_DIR_NAME, "extensions");
-	addPaths(discoverExtensionsInDir(localExtDir));
+	// 1. User extensions: agentDir/extensions/
+	const globalExtDir = getUserExtensionsDir(agentDir);
+	addPaths(discoverExtensionEntriesInDir(globalExtDir));
 
-	// 2. Global extensions: agentDir/extensions/
-	const globalExtDir = path.join(agentDir, "extensions");
-	addPaths(discoverExtensionsInDir(globalExtDir));
-
-	// 3. Explicitly configured paths
+	// 2. Explicitly configured paths
 	for (const p of configuredPaths) {
 		const resolved = resolvePath(p, cwd);
 		if (fs.existsSync(resolved) && fs.statSync(resolved).isDirectory()) {
@@ -589,7 +585,7 @@ export async function discoverAndLoadExtensions(
 				continue;
 			}
 			// No explicit entries - discover individual files in directory
-			addPaths(discoverExtensionsInDir(resolved));
+			addPaths(discoverExtensionEntriesInDir(resolved));
 			continue;
 		}
 

@@ -1,7 +1,6 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "fs";
 import { homedir } from "os";
 import { basename, dirname, isAbsolute, join, resolve, sep } from "path";
-import { CONFIG_DIR_NAME } from "../../config.js";
 import { parseFrontmatter } from "../../utils/frontmatter.js";
 import { createSyntheticSourceInfo, type SourceInfo } from "./source-info.js";
 
@@ -175,7 +174,7 @@ function loadTemplatesFromDir(dir: string, getSourceInfo: (filePath: string) => 
 }
 
 export interface LoadPromptTemplatesOptions {
-	/** Working directory for project-local templates. */
+	/** Working directory used to resolve explicit relative paths. */
 	cwd: string;
 	/** Agent config directory for global templates. */
 	agentDir: string;
@@ -201,8 +200,7 @@ function resolvePromptPath(p: string, cwd: string): string {
 /**
  * Load all prompt templates from:
  * 1. Global: agentDir/prompts/
- * 2. Project: cwd/{CONFIG_DIR_NAME}/prompts/
- * 3. Explicit prompt paths
+ * 2. Explicit prompt paths
  */
 export function loadPromptTemplates(options: LoadPromptTemplatesOptions): PromptTemplate[] {
 	const resolvedCwd = options.cwd;
@@ -213,7 +211,6 @@ export function loadPromptTemplates(options: LoadPromptTemplatesOptions): Prompt
 	const templates: PromptTemplate[] = [];
 
 	const globalPromptsDir = options.agentDir ? join(options.agentDir, "prompts") : resolvedAgentDir;
-	const projectPromptsDir = resolve(resolvedCwd, CONFIG_DIR_NAME, "prompts");
 
 	const isUnderPath = (target: string, root: string): boolean => {
 		const normalizedRoot = resolve(root);
@@ -232,13 +229,6 @@ export function loadPromptTemplates(options: LoadPromptTemplatesOptions): Prompt
 				baseDir: globalPromptsDir,
 			});
 		}
-		if (isUnderPath(resolvedPath, projectPromptsDir)) {
-			return createSyntheticSourceInfo(resolvedPath, {
-				source: "local",
-				scope: "project",
-				baseDir: projectPromptsDir,
-			});
-		}
 		return createSyntheticSourceInfo(resolvedPath, {
 			source: "local",
 			baseDir: statSync(resolvedPath).isDirectory() ? resolvedPath : dirname(resolvedPath),
@@ -247,10 +237,9 @@ export function loadPromptTemplates(options: LoadPromptTemplatesOptions): Prompt
 
 	if (includeDefaults) {
 		templates.push(...loadTemplatesFromDir(globalPromptsDir, getSourceInfo));
-		templates.push(...loadTemplatesFromDir(projectPromptsDir, getSourceInfo));
 	}
 
-	// 3. Load explicit prompt paths
+	// 2. Load explicit prompt paths
 	for (const rawPath of promptPaths) {
 		const resolvedPath = resolvePromptPath(rawPath, resolvedCwd);
 		if (!existsSync(resolvedPath)) {

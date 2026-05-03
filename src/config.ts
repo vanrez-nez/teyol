@@ -66,6 +66,14 @@ export function getPromptsDir(): string {
 	return join(getAgentDir(), "prompts");
 }
 
+export function getPackageExtensionsDir(): string {
+	return resolve(join(__dirname, "extensions"));
+}
+
+export function getUserExtensionsDir(agentDir: string = getAgentDir()): string {
+	return join(dirname(agentDir), "extensions");
+}
+
 export function getSessionsDir(): string {
 	return join(getAgentDir(), "sessions");
 }

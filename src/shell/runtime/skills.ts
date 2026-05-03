@@ -2,7 +2,7 @@ import { existsSync, readdirSync, readFileSync, statSync } from "fs";
 import ignore from "ignore";
 import { homedir } from "os";
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from "path";
-import { CONFIG_DIR_NAME, getAgentDir } from "../../config.js";
+import { getAgentDir } from "../../config.js";
 import { parseFrontmatter } from "../../utils/frontmatter.js";
 import { canonicalizePath } from "../../utils/paths.js";
 import type { ResourceDiagnostic } from "./diagnostics.js";
@@ -147,11 +147,7 @@ function createSkillSourceInfo(filePath: string, baseDir: string, source: string
 				baseDir,
 			});
 		case "project":
-			return createSyntheticSourceInfo(filePath, {
-				source: "local",
-				scope: "project",
-				baseDir,
-			});
+			return createSyntheticSourceInfo(filePath, { source: "local", baseDir });
 		case "path":
 			return createSyntheticSourceInfo(filePath, {
 				source: "local",
@@ -446,11 +442,9 @@ export function loadSkills(options: LoadSkillsOptions): LoadSkillsResult {
 
 	if (includeDefaults) {
 		addSkills(loadSkillsFromDirInternal(join(resolvedAgentDir, "skills"), "user", true));
-		addSkills(loadSkillsFromDirInternal(resolve(cwd, CONFIG_DIR_NAME, "skills"), "project", true));
 	}
 
 	const userSkillsDir = join(resolvedAgentDir, "skills");
-	const projectSkillsDir = resolve(cwd, CONFIG_DIR_NAME, "skills");
 
 	const isUnderPath = (target: string, root: string): boolean => {
 		const normalizedRoot = resolve(root);
@@ -461,10 +455,9 @@ export function loadSkills(options: LoadSkillsOptions): LoadSkillsResult {
 		return target.startsWith(prefix);
 	};
 
-	const getSource = (resolvedPath: string): "user" | "project" | "path" => {
+	const getSource = (resolvedPath: string): "user" | "path" => {
 		if (!includeDefaults) {
 			if (isUnderPath(resolvedPath, userSkillsDir)) return "user";
-			if (isUnderPath(resolvedPath, projectSkillsDir)) return "project";
 		}
 		return "path";
 	};

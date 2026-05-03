@@ -62,7 +62,7 @@ import type { CustomMessage } from "./messages.js";
 import type { ModelRegistry } from "./model-registry.js";
 import { expandPromptTemplate, type PromptTemplate } from "./prompt-templates.js";
 import type { ResourceExtensionPaths, ResourceLoader } from "./resource-loader.js";
-import { getLogger } from "./logger.js";
+import { logger } from "#logger";
 import type { BranchSummaryEntry, CompactionEntry, SessionManager } from "./session-manager.js";
 import { CURRENT_SESSION_VERSION, getLatestCompactionEntry, type SessionHeader } from "./session-manager.js";
 import type { SettingsManager } from "./settings-manager.js";
@@ -1405,7 +1405,7 @@ export class AgentSession {
     // Re-clamp thinking level for new model's capabilities
     this.setThinkingLevel(thinkingLevel);
 
-    getLogger().info("model.selected", { provider: model.provider, model: model.id, api: model.api });
+    logger.info("model.selected", { provider: model.provider, model: model.id, api: model.api });
     await this._emitModelSelect(model, previousModel, "set");
   }
 
@@ -2336,7 +2336,7 @@ export class AgentSession {
     }
 
     this.setActiveToolsByName([...new Set(nextActiveToolNames)]);
-    getLogger().debug("tools.registered", {
+    logger.debug("tools.registered", {
       registered: Array.from(this._toolRegistry.keys()),
       active: this.getActiveToolNames(),
     });

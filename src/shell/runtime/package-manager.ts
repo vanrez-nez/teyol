@@ -27,7 +27,7 @@ import type { Readable } from "node:stream";
 import { globSync } from "glob";
 import ignore from "ignore";
 import { minimatch } from "minimatch";
-import { CONFIG_DIR_NAME, isBunRuntime } from "../../config.js";
+import { getUserExtensionsDir, isBunRuntime } from "../../config.js";
 import { type GitSource, parseGitUrl } from "../../utils/git.js";
 import { canonicalizePath, isLocalPath } from "../../utils/paths.js";
 const isStdoutTakenOver = () => false;
@@ -83,7 +83,7 @@ export interface PackageUpdate {
 
 export interface ConfiguredPackage {
 	source: string;
-	scope: "user" | "project";
+	scope: "user";
 	filtered: boolean;
 	installedPath?: string;
 }
@@ -103,7 +103,7 @@ export interface PackageManager {
 	addSourceToSettings(source: string, options?: { local?: boolean }): boolean;
 	removeSourceFromSettings(source: string, options?: { local?: boolean }): boolean;
 	setProgressCallback(callback: ProgressCallback | undefined): void;
-	getInstalledPath(source: string, scope: "user" | "project"): string | undefined;
+	getInstalledPath(source: string, scope: "user"): string | undefined;
 }
 
 interface PackageManagerOptions {
@@ -112,7 +112,7 @@ interface PackageManagerOptions {
 	settingsManager: SettingsManager;
 }
 
-type SourceScope = "user" | "project" | "temporary";
+type SourceScope = "user" | "temporary";
 
 type NpmSource = {
 	type: "npm";
@@ -163,16 +163,13 @@ interface ResourceAccumulator {
  * name-collision resolution ("first wins") produces the correct outcome.
  *
  * Precedence (highest to lowest):
- *   0  project + settings entry (source: "local", scope: "project")
- *   1  project + auto-discovered (source: "auto", scope: "project")
- *   2  user + settings entry (source: "local", scope: "user")
- *   3  user + auto-discovered (source: "auto", scope: "user")
+ *   0  user + settings entry (source: "local", scope: "user")
+ *   1  user + auto-discovered (source: "auto", scope: "user")
  *   4  package resource (origin: "package")
  */
 function resourcePrecedenceRank(m: PathMetadata): number {
 	if (m.origin === "package") return 4;
-	const scopeBase = m.scope === "project" ? 0 : 2;
-	return scopeBase + (m.source === "local" ? 0 : 1);
+	return m.source === "local" ? 0 : 1;
 }
 
 interface PackageFilter {
@@ -744,9 +741,8 @@ export class DefaultPackageManager implements PackageManager {
 	}
 
 	addSourceToSettings(source: string, options?: { local?: boolean }): boolean {
-		const scope: SourceScope = options?.local ? "project" : "user";
-		const currentSettings =
-			scope === "project" ? this.settingsManager.getProjectSettings() : this.settingsManager.getGlobalSettings();
+		const scope: SourceScope = "user";
+		const currentSettings = this.settingsManager.getGlobalSettings();
 		const currentPackages = currentSettings.packages ?? [];
 		const normalizedSource = this.normalizePackageSourceForSettings(source, scope);
 		const exists = currentPackages.some((existing) => this.packageSourcesMatch(existing, source, scope));
@@ -754,33 +750,24 @@ export class DefaultPackageManager implements PackageManager {
 			return false;
 		}
 		const nextPackages = [...currentPackages, normalizedSource];
-		if (scope === "project") {
-			this.settingsManager.setProjectPackages(nextPackages);
-		} else {
-			this.settingsManager.setPackages(nextPackages);
-		}
+		this.settingsManager.setPackages(nextPackages);
 		return true;
 	}
 
 	removeSourceFromSettings(source: string, options?: { local?: boolean }): boolean {
-		const scope: SourceScope = options?.local ? "project" : "user";
-		const currentSettings =
-			scope === "project" ? this.settingsManager.getProjectSettings() : this.settingsManager.getGlobalSettings();
+		const scope: SourceScope = "user";
+		const currentSettings = this.settingsManager.getGlobalSettings();
 		const currentPackages = currentSettings.packages ?? [];
 		const nextPackages = currentPackages.filter((existing) => !this.packageSourcesMatch(existing, source, scope));
 		const changed = nextPackages.length !== currentPackages.length;
 		if (!changed) {
 			return false;
 		}
-		if (scope === "project") {
-			this.settingsManager.setProjectPackages(nextPackages);
-		} else {
-			this.settingsManager.setPackages(nextPackages);
-		}
+		this.settingsManager.setPackages(nextPackages);
 		return true;
 	}
 
-	getInstalledPath(source: string, scope: "user" | "project"): string | undefined {
+	getInstalledPath(source: string, scope: "user"): string | undefined {
 		const parsed = this.parseSource(source);
 		if (parsed.type === "npm") {
 			const path = this.getNpmInstallPath(parsed, scope);
@@ -822,39 +809,20 @@ export class DefaultPackageManager implements PackageManager {
 	async resolve(onMissing?: (source: string) => Promise<MissingSourceAction>): Promise<ResolvedPaths> {
 		const accumulator = this.createAccumulator();
 		const globalSettings = this.settingsManager.getGlobalSettings();
-		const projectSettings = this.settingsManager.getProjectSettings();
 
-		// Collect all packages with scope (project first so cwd resources win collisions)
 		const allPackages: Array<{ pkg: PackageSource; scope: SourceScope }> = [];
-		for (const pkg of projectSettings.packages ?? []) {
-			allPackages.push({ pkg, scope: "project" });
-		}
 		for (const pkg of globalSettings.packages ?? []) {
 			allPackages.push({ pkg, scope: "user" });
 		}
 
-		// Dedupe: project scope wins over global for same package identity
 		const packageSources = this.dedupePackages(allPackages);
 		await this.resolvePackageSources(packageSources, accumulator, onMissing);
 
 		const globalBaseDir = this.agentDir;
-		const projectBaseDir = join(this.cwd, CONFIG_DIR_NAME);
 
 		for (const resourceType of RESOURCE_TYPES) {
 			const target = this.getTargetMap(accumulator, resourceType);
 			const globalEntries = (globalSettings[resourceType] ?? []) as string[];
-			const projectEntries = (projectSettings[resourceType] ?? []) as string[];
-			this.resolveLocalEntries(
-				projectEntries,
-				resourceType,
-				target,
-				{
-					source: "local",
-					scope: "project",
-					origin: "top-level",
-				},
-				projectBaseDir,
-			);
 			this.resolveLocalEntries(
 				globalEntries,
 				resourceType,
@@ -868,7 +836,7 @@ export class DefaultPackageManager implements PackageManager {
 			);
 		}
 
-		this.addAutoDiscoveredResources(accumulator, globalSettings, projectSettings, globalBaseDir, projectBaseDir);
+		this.addAutoDiscoveredResources(accumulator, globalSettings, globalBaseDir);
 
 		return this.toResolvedPaths(accumulator);
 	}
@@ -878,7 +846,7 @@ export class DefaultPackageManager implements PackageManager {
 		options?: { local?: boolean; temporary?: boolean },
 	): Promise<ResolvedPaths> {
 		const accumulator = this.createAccumulator();
-		const scope: SourceScope = options?.temporary ? "temporary" : options?.local ? "project" : "user";
+		const scope: SourceScope = options?.temporary ? "temporary" : "user";
 		const packageSources = sources.map((source) => ({ pkg: source as PackageSource, scope }));
 		await this.resolvePackageSources(packageSources, accumulator);
 		return this.toResolvedPaths(accumulator);
@@ -886,7 +854,6 @@ export class DefaultPackageManager implements PackageManager {
 
 	listConfiguredPackages(): ConfiguredPackage[] {
 		const globalSettings = this.settingsManager.getGlobalSettings();
-		const projectSettings = this.settingsManager.getProjectSettings();
 		const configuredPackages: ConfiguredPackage[] = [];
 
 		for (const pkg of globalSettings.packages ?? []) {
@@ -899,22 +866,12 @@ export class DefaultPackageManager implements PackageManager {
 			});
 		}
 
-		for (const pkg of projectSettings.packages ?? []) {
-			const source = typeof pkg === "string" ? pkg : pkg.source;
-			configuredPackages.push({
-				source,
-				scope: "project",
-				filtered: typeof pkg === "object",
-				installedPath: this.getInstalledPath(source, "project"),
-			});
-		}
-
 		return configuredPackages;
 	}
 
 	async install(source: string, options?: { local?: boolean }): Promise<void> {
 		const parsed = this.parseSource(source);
-		const scope: SourceScope = options?.local ? "project" : "user";
+		const scope: SourceScope = "user";
 		await this.withProgress("install", source, `Installing ${source}...`, async () => {
 			if (parsed.type === "npm") {
 				await this.installNpm(parsed, scope, false);
@@ -942,7 +899,7 @@ export class DefaultPackageManager implements PackageManager {
 
 	async remove(source: string, options?: { local?: boolean }): Promise<void> {
 		const parsed = this.parseSource(source);
-		const scope: SourceScope = options?.local ? "project" : "user";
+		const scope: SourceScope = "user";
 		await this.withProgress("remove", source, `Removing ${source}...`, async () => {
 			if (parsed.type === "npm") {
 				await this.uninstallNpm(parsed, scope);
@@ -966,7 +923,6 @@ export class DefaultPackageManager implements PackageManager {
 
 	async update(source?: string): Promise<void> {
 		const globalSettings = this.settingsManager.getGlobalSettings();
-		const projectSettings = this.settingsManager.getProjectSettings();
 		const identity = source ? this.getPackageIdentity(source) : undefined;
 		let matched = false;
 		const updateSources: ConfiguredUpdateSource[] = [];
@@ -977,20 +933,9 @@ export class DefaultPackageManager implements PackageManager {
 			matched = true;
 			updateSources.push({ source: sourceStr, scope: "user" });
 		}
-		for (const pkg of projectSettings.packages ?? []) {
-			const sourceStr = typeof pkg === "string" ? pkg : pkg.source;
-			if (identity && this.getPackageIdentity(sourceStr, "project") !== identity) continue;
-			matched = true;
-			updateSources.push({ source: sourceStr, scope: "project" });
-		}
 
 		if (source && !matched) {
-			throw new Error(
-				this.buildNoMatchingPackageMessage(source, [
-					...(globalSettings.packages ?? []),
-					...(projectSettings.packages ?? []),
-				]),
-			);
+			throw new Error(this.buildNoMatchingPackageMessage(source, [...(globalSettings.packages ?? [])]));
 		}
 
 		await this.updateConfiguredSources(updateSources);
@@ -1022,24 +967,16 @@ export class DefaultPackageManager implements PackageManager {
 		}));
 		const npmCheckResults = await this.runWithConcurrency(npmCheckTasks, UPDATE_CHECK_CONCURRENCY);
 		const userNpmUpdates: NpmUpdateTarget[] = [];
-		const projectNpmUpdates: NpmUpdateTarget[] = [];
 		for (const result of npmCheckResults) {
 			if (!result.shouldUpdate) {
 				continue;
 			}
-			if (result.entry.scope === "user") {
-				userNpmUpdates.push(result.entry);
-			} else {
-				projectNpmUpdates.push(result.entry);
-			}
+			userNpmUpdates.push(result.entry);
 		}
 
 		const tasks: Promise<void>[] = [];
 		if (userNpmUpdates.length > 0) {
 			tasks.push(this.updateNpmBatch(userNpmUpdates, "user"));
-		}
-		if (projectNpmUpdates.length > 0) {
-			tasks.push(this.updateNpmBatch(projectNpmUpdates, "project"));
 		}
 		if (gitCandidates.length > 0) {
 			const gitTasks = gitCandidates.map(
@@ -1100,11 +1037,7 @@ export class DefaultPackageManager implements PackageManager {
 		}
 
 		const globalSettings = this.settingsManager.getGlobalSettings();
-		const projectSettings = this.settingsManager.getProjectSettings();
 		const allPackages: Array<{ pkg: PackageSource; scope: SourceScope }> = [];
-		for (const pkg of projectSettings.packages ?? []) {
-			allPackages.push({ pkg, scope: "project" });
-		}
 		for (const pkg of globalSettings.packages ?? []) {
 			allPackages.push({ pkg, scope: "user" });
 		}
@@ -1570,7 +1503,7 @@ export class DefaultPackageManager implements PackageManager {
 
 	/**
 	 * Get a unique identity for a package, ignoring version/ref.
-	 * Used to detect when the same package is in both global and project settings.
+	 * Used to detect repeated package entries.
 	 * For git packages, uses normalized host/path to ensure SSH and HTTPS URLs
 	 * for the same repository are treated as identical.
 	 */
@@ -1590,10 +1523,6 @@ export class DefaultPackageManager implements PackageManager {
 		return `local:${this.resolvePath(parsed.path)}`;
 	}
 
-	/**
-	 * Dedupe packages: if same package identity appears in both global and project,
-	 * keep only the project one (project wins).
-	 */
 	private dedupePackages(
 		packages: Array<{ pkg: PackageSource; scope: SourceScope }>,
 	): Array<{ pkg: PackageSource; scope: SourceScope }> {
@@ -1606,12 +1535,7 @@ export class DefaultPackageManager implements PackageManager {
 			const existing = seen.get(identity);
 			if (!existing) {
 				seen.set(identity, entry);
-			} else if (entry.scope === "project" && existing.scope === "user") {
-				// Project wins over user
-				seen.set(identity, entry);
 			}
-			// If existing is project and new is global, keep existing (project)
-			// If both are same scope, keep first one
 		}
 
 		return Array.from(seen.values());
@@ -1803,9 +1727,6 @@ export class DefaultPackageManager implements PackageManager {
 		if (temporary) {
 			return this.getTemporaryDir("npm");
 		}
-		if (scope === "project") {
-			return join(this.cwd, CONFIG_DIR_NAME, "npm");
-		}
 		return join(this.getGlobalNpmRoot(), "..");
 	}
 
@@ -1829,9 +1750,6 @@ export class DefaultPackageManager implements PackageManager {
 		if (scope === "temporary") {
 			return join(this.getTemporaryDir("npm"), "node_modules", source.name);
 		}
-		if (scope === "project") {
-			return join(this.cwd, CONFIG_DIR_NAME, "npm", "node_modules", source.name);
-		}
 		return join(this.getGlobalNpmRoot(), source.name);
 	}
 
@@ -1839,18 +1757,12 @@ export class DefaultPackageManager implements PackageManager {
 		if (scope === "temporary") {
 			return this.getTemporaryDir(`git-${source.host}`, source.path);
 		}
-		if (scope === "project") {
-			return join(this.cwd, CONFIG_DIR_NAME, "git", source.host, source.path);
-		}
 		return join(this.agentDir, "git", source.host, source.path);
 	}
 
 	private getGitInstallRoot(scope: SourceScope): string | undefined {
 		if (scope === "temporary") {
 			return undefined;
-		}
-		if (scope === "project") {
-			return join(this.cwd, CONFIG_DIR_NAME, "git");
 		}
 		return join(this.agentDir, "git");
 	}
@@ -1864,9 +1776,6 @@ export class DefaultPackageManager implements PackageManager {
 	}
 
 	private getBaseDirForScope(scope: SourceScope): string {
-		if (scope === "project") {
-			return join(this.cwd, CONFIG_DIR_NAME);
-		}
 		if (scope === "user") {
 			return this.agentDir;
 		}
@@ -2091,21 +2000,13 @@ export class DefaultPackageManager implements PackageManager {
 	private addAutoDiscoveredResources(
 		accumulator: ResourceAccumulator,
 		globalSettings: ReturnType<SettingsManager["getGlobalSettings"]>,
-		projectSettings: ReturnType<SettingsManager["getProjectSettings"]>,
 		globalBaseDir: string,
-		projectBaseDir: string,
 	): void {
 		const userMetadata: PathMetadata = {
 			source: "auto",
 			scope: "user",
 			origin: "top-level",
 			baseDir: globalBaseDir,
-		};
-		const projectMetadata: PathMetadata = {
-			source: "auto",
-			scope: "project",
-			origin: "top-level",
-			baseDir: projectBaseDir,
 		};
 
 		const userOverrides = {
@@ -2114,24 +2015,12 @@ export class DefaultPackageManager implements PackageManager {
 			prompts: (globalSettings.prompts ?? []) as string[],
 			themes: (globalSettings.themes ?? []) as string[],
 		};
-		const projectOverrides = {
-			extensions: (projectSettings.extensions ?? []) as string[],
-			skills: (projectSettings.skills ?? []) as string[],
-			prompts: (projectSettings.prompts ?? []) as string[],
-			themes: (projectSettings.themes ?? []) as string[],
-		};
 
 		const userDirs = {
-			extensions: join(globalBaseDir, "extensions"),
+			extensions: getUserExtensionsDir(globalBaseDir),
 			skills: join(globalBaseDir, "skills"),
 			prompts: join(globalBaseDir, "prompts"),
 			themes: join(globalBaseDir, "themes"),
-		};
-		const projectDirs = {
-			extensions: join(projectBaseDir, "extensions"),
-			skills: join(projectBaseDir, "skills"),
-			prompts: join(projectBaseDir, "prompts"),
-			themes: join(projectBaseDir, "themes"),
 		};
 		const addResources = (
 			resourceType: ResourceType,
@@ -2146,35 +2035,6 @@ export class DefaultPackageManager implements PackageManager {
 				this.addResource(target, path, metadata, enabled);
 			}
 		};
-
-		addResources(
-			"extensions",
-			collectAutoExtensionEntries(projectDirs.extensions),
-			projectMetadata,
-			projectOverrides.extensions,
-			projectBaseDir,
-		);
-		addResources(
-			"skills",
-			collectSkillEntries(projectDirs.skills),
-			projectMetadata,
-			projectOverrides.skills,
-			projectBaseDir,
-		);
-		addResources(
-			"prompts",
-			collectAutoPromptEntries(projectDirs.prompts),
-			projectMetadata,
-			projectOverrides.prompts,
-			projectBaseDir,
-		);
-		addResources(
-			"themes",
-			collectAutoThemeEntries(projectDirs.themes),
-			projectMetadata,
-			projectOverrides.themes,
-			projectBaseDir,
-		);
 
 		addResources(
 			"extensions",

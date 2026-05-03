@@ -1,14 +1,13 @@
 import type { AgentSession } from "#shell/runtime/agent-session.js";
 import type { KeybindingsManager } from "#shell/runtime/keybindings.js";
 import { type Component, Container, Spacer, Text, type TUI } from "#tui/index.js";
-import { getLogger } from "#shell/runtime/logger.js";
+import { logger } from "#logger";
 import { setRegisteredThemes, setTheme, theme } from "../../../theme/theme.js";
 import { DynamicBorder } from "../../components/dynamic-border.js";
 import type { CustomEditor } from "../../components/custom-editor.js";
 import type { ShellLayoutComponent } from "../../layout.js";
 import type { CliState } from "../../state/index.js";
 import type { TuiCommand } from "../types.js";
-import { applyLoggerConfig } from "./log.js";
 
 interface Expandable {
 	setExpanded(expanded: boolean): void;
@@ -82,7 +81,7 @@ export async function runReload({
 			layout.restoreEditorHost(editor);
 		};
 
-		getLogger().info("reload.start");
+		logger.info("reload.start");
 
 		try {
 			await session.reload();
@@ -117,12 +116,13 @@ export async function runReload({
 			if (modelsJsonError) {
 				showError({ chatContainer, ui }, `models.json error: ${modelsJsonError}`);
 			}
-			applyLoggerConfig(session);
-			getLogger().info("reload.complete");
+			await session.settingsManager.flush();
+			logger.reloadConfig();
+			logger.info("reload.complete");
 			showStatus({ chatContainer, ui }, "Reloaded keybindings, extensions, skills, prompts, themes");
 		} catch (error) {
 			dismissReloadBox(previousEditor);
-			getLogger().error("reload.error", { error });
+			logger.error("reload.error", { error });
 			showError({ chatContainer, ui }, `Reload failed: ${error instanceof Error ? error.message : String(error)}`);
 		}
 }
