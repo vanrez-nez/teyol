@@ -16,6 +16,7 @@ export { SkillInvocationMessageComponent } from "./skill-invocation-message.js";
 export { ThemeSelectorComponent } from "./theme-selector.js";
 export { ThinkingSelectorComponent } from "./thinking-selector.js";
 export { TimelineBlock, type SerializedTimelineBlock, type TimelineBlockOptions, type TimelineBlockState } from "./timeline/base-block.js";
+export { loadAsciiLogo, LogoBlock, type LogoBlockOptions, type LogoBlockState } from "./timeline/logo-block.js";
 export { ToolExecutionComponent, type ToolExecutionOptions } from "./tool-execution.js";
 export { UserMessageComponent } from "./user-message.js";
 export { truncateToVisualLines, type VisualTruncateResult } from "./visual-truncate.js";

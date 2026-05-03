@@ -14,7 +14,7 @@ import { CustomMessageComponent } from "./components/custom-message.js";
 import { DynamicBorder } from "./components/dynamic-border.js";
 import { formatAppKeyDisplay } from "./display-helpers.js";
 import { keyText } from "./components/keybinding-hints.js";
-import { loadAsciiLogo, LogoComponent } from "./logo.js";
+import { LogoBlock } from "./components/timeline/logo-block.js";
 import { SkillInvocationMessageComponent } from "./components/skill-invocation-message.js";
 import { ToolExecutionComponent } from "./components/tool-execution.js";
 import { UserMessageComponent } from "./components/user-message.js";
@@ -98,7 +98,7 @@ export class Timeline {
     );
 
     this.dependencies.chatContainer.addChild(new Spacer(1));
-    this.dependencies.chatContainer.addChild(new LogoComponent(loadAsciiLogo(), options.versionLine, 0, 1));
+    this.dependencies.chatContainer.addChild(new LogoBlock({ versionLine: options.versionLine, paddingTop: 0, paddingBottom: 1 }));
     this.dependencies.chatContainer.addChild(this.startupContent);
     this.dependencies.chatContainer.addChild(new Spacer(1));
   }
