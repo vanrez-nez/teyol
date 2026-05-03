@@ -558,8 +558,8 @@ function createShellLayoutRenderFixture(timelineLines, sidebarLines) {
 
 function testTimelineBlockBaseContract() {
 	class TestTimelineBlock extends TimelineBlock {
-		constructor() {
-			super("test-block", "block-1");
+		constructor(options = {}) {
+			super("test-block", { id: "block-1", ...options });
 		}
 
 		serialize() {
@@ -581,6 +581,31 @@ function testTimelineBlockBaseContract() {
 		id: "block-1",
 		state: { text: "hello" },
 	});
+
+	const padded = new TestTimelineBlock({ padding: { left: 2, top: 1, right: 1, bottom: 1 } });
+	padded.addChild(staticComponent(["x"]));
+	assert.deepEqual(padded.render(8), ["        ", "  x     ", "        "]);
+
+	const bordered = new TestTimelineBlock({ border: { left: 1, top: 1, right: 1, bottom: 1 } });
+	bordered.addChild(staticComponent(["x"]));
+	const borderedLines = bordered.render(5);
+	assert.equal(visibleWidth(borderedLines[0]), 5);
+	assert.ok(borderedLines[0].includes("┌"));
+	assert.ok(borderedLines[0].includes("┐"));
+	assert.ok(borderedLines[1].includes("│"));
+	assert.ok(borderedLines[2].includes("└"));
+	assert.ok(borderedLines[2].includes("┘"));
+
+	const margin = new TestTimelineBlock({ margin: { left: 1, top: 1, right: 1, bottom: 1 } });
+	margin.addChild(staticComponent(["x"]));
+	assert.deepEqual(margin.render(5), ["     ", " x   ", "     "]);
+
+	initTheme("dark", false);
+	const background = new TestTimelineBlock({ background: "userMessageBg" });
+	background.addChild(staticComponent(["x"]));
+	const [backgroundLine] = background.render(5);
+	assert.ok(backgroundLine.includes(theme.getBgAnsi("userMessageBg")));
+	assert.equal(visibleWidth(backgroundLine), 5);
 }
 
 function testShellLayoutNarrowWidth() {

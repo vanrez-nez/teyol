@@ -3,13 +3,12 @@ import { join } from "node:path";
 import { visibleWidth } from "#tui/index.js";
 import { getPackageDir } from "../../../../config.js";
 import { theme } from "../../../theme/theme.js";
-import { TimelineBlock } from "./base-block.js";
+import { TimelineBlock, type TimelineBlockEdges, type TimelineBlockOptions } from "./base-block.js";
 
 export interface LogoBlockState {
 	logo?: string;
 	versionLine: string;
-	paddingTop: number;
-	paddingBottom: number;
+	padding: Required<TimelineBlockEdges>;
 }
 
 export interface SerializedLogoBlock {
@@ -18,12 +17,9 @@ export interface SerializedLogoBlock {
 	state: LogoBlockState;
 }
 
-export interface LogoBlockOptions {
-	id?: string;
+export interface LogoBlockOptions extends TimelineBlockOptions {
 	logo?: string;
 	versionLine: string;
-	paddingTop?: number;
-	paddingBottom?: number;
 }
 
 export function loadAsciiLogo(): string | undefined {
@@ -32,12 +28,6 @@ export function loadAsciiLogo(): string | undefined {
 
 	const logo = readFileSync(logoPath, "utf-8").trimEnd();
 	return logo.trim() ? logo : undefined;
-}
-
-function withVerticalPadding(text: string, top: number, bottom: number): string {
-	const topPadding = "\n".repeat(Math.max(0, top));
-	const bottomPadding = "\n".repeat(Math.max(0, bottom));
-	return `${topPadding}${text}${bottomPadding}`;
 }
 
 function withHorizontalPadding(text: string, width: number): string {
@@ -54,18 +44,14 @@ function withHorizontalPadding(text: string, width: number): string {
 export class LogoBlock extends TimelineBlock {
 	private readonly logo: string | undefined;
 	private readonly versionLine: string;
-	private readonly paddingTop: number;
-	private readonly paddingBottom: number;
 
 	constructor(options: LogoBlockOptions) {
-		super("logo", options.id);
+		super("logo", { ...options, padding: { top: 0, bottom: 1, ...options.padding } });
 		this.logo = options.logo ?? loadAsciiLogo();
 		this.versionLine = options.versionLine;
-		this.paddingTop = options.paddingTop ?? 0;
-		this.paddingBottom = options.paddingBottom ?? 1;
 	}
 
-	override render(width: number): string[] {
+	protected override renderContent(width: number): string[] {
 		if (!this.logo) {
 			return [withHorizontalPadding(theme.bold(theme.fg("accent", this.versionLine)), width)];
 		}
@@ -73,7 +59,7 @@ export class LogoBlock extends TimelineBlock {
 		const logo = theme.bold(theme.fg("accent", this.logo));
 		const centeredLogo = withHorizontalPadding(logo, width);
 		const centeredVersion = withHorizontalPadding(theme.fg("dim", this.versionLine), width);
-		return withVerticalPadding(`${centeredLogo}\n${centeredVersion}`, this.paddingTop, this.paddingBottom).split("\n");
+		return `${centeredLogo}\n${centeredVersion}`.split("\n");
 	}
 
 	serialize(): SerializedLogoBlock {
@@ -83,8 +69,7 @@ export class LogoBlock extends TimelineBlock {
 			state: {
 				logo: this.logo,
 				versionLine: this.versionLine,
-				paddingTop: this.paddingTop,
-				paddingBottom: this.paddingBottom,
+				padding: this.getPresentationState().padding,
 			},
 		};
 	}

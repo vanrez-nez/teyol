@@ -1,5 +1,5 @@
 import { Text } from "#tui/index.js";
-import { TimelineBlock } from "./base-block.js";
+import { TimelineBlock, type TimelineBlockEdges, type TimelineBlockOptions } from "./base-block.js";
 
 export interface StartupBlockState {
 	expandedInstructions: string;
@@ -7,8 +7,7 @@ export interface StartupBlockState {
 	compactOnboarding: string;
 	onboarding: string;
 	expanded: boolean;
-	paddingX: number;
-	paddingY: number;
+	padding: Required<TimelineBlockEdges>;
 }
 
 export interface SerializedStartupBlock {
@@ -17,15 +16,12 @@ export interface SerializedStartupBlock {
 	state: StartupBlockState;
 }
 
-export interface StartupBlockOptions {
-	id?: string;
+export interface StartupBlockOptions extends TimelineBlockOptions {
 	expandedInstructions: string;
 	compactInstructions: string;
 	compactOnboarding: string;
 	onboarding: string;
 	expanded: boolean;
-	paddingX?: number;
-	paddingY?: number;
 }
 
 export class StartupBlock extends TimelineBlock {
@@ -34,20 +30,16 @@ export class StartupBlock extends TimelineBlock {
 	private readonly compactInstructions: string;
 	private readonly compactOnboarding: string;
 	private readonly onboarding: string;
-	private readonly paddingX: number;
-	private readonly paddingY: number;
 	private readonly text: Text;
 
 	constructor(options: StartupBlockOptions) {
-		super("startup", options.id);
+		super("startup", { ...options, padding: { left: 1, ...options.padding } });
 		this.expanded = options.expanded;
 		this.expandedInstructions = options.expandedInstructions;
 		this.compactInstructions = options.compactInstructions;
 		this.compactOnboarding = options.compactOnboarding;
 		this.onboarding = options.onboarding;
-		this.paddingX = options.paddingX ?? 1;
-		this.paddingY = options.paddingY ?? 0;
-		this.text = new Text(this.getText(), this.paddingX, this.paddingY);
+		this.text = new Text(this.getText(), 0, 0);
 		this.addChild(this.text);
 	}
 
@@ -66,8 +58,7 @@ export class StartupBlock extends TimelineBlock {
 				compactOnboarding: this.compactOnboarding,
 				onboarding: this.onboarding,
 				expanded: this.expanded,
-				paddingX: this.paddingX,
-				paddingY: this.paddingY,
+				padding: this.getPresentationState().padding,
 			},
 		};
 	}

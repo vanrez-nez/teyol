@@ -80,12 +80,11 @@ export class Timeline {
       compactOnboarding: options.compactOnboarding,
       onboarding: options.onboarding,
       expanded: options.expanded,
-      paddingX: 1,
-      paddingY: 0,
+      padding: { left: 1 },
     });
 
     this.dependencies.chatContainer.addChild(new Spacer(1));
-    this.dependencies.chatContainer.addChild(new LogoBlock({ versionLine: options.versionLine, paddingTop: 0, paddingBottom: 1 }));
+    this.dependencies.chatContainer.addChild(new LogoBlock({ versionLine: options.versionLine, padding: { bottom: 1 } }));
     this.dependencies.chatContainer.addChild(this.startupContent);
     this.dependencies.chatContainer.addChild(new Spacer(1));
   }
