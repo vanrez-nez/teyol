@@ -1,6 +1,5 @@
 // UI Components for extensions
 export { BorderedLoader } from "./bordered-loader.js";
-export { CompactionSummaryMessageComponent } from "./compaction-summary-message.js";
 export { CustomEditor } from "./custom-editor.js";
 export { CustomMessageComponent } from "./custom-message.js";
 export { DynamicBorder } from "./dynamic-border.js";
@@ -26,6 +25,12 @@ export {
 	type AssistantToolBlockState,
 	type SerializedAssistantToolBlock,
 } from "./timeline/assistant-tool-block.js";
+export {
+	CompactionSummaryBlock,
+	type CompactionSummaryBlockOptions,
+	type CompactionSummaryBlockState,
+	type SerializedCompactionSummaryBlock,
+} from "./timeline/compaction-summary-block.js";
 export {
 	LoadedResourcesBlock,
 	type LoadedResourcesBlockOptions,

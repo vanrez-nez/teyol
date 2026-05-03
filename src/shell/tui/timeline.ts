@@ -8,12 +8,12 @@ import type { Component, Container, EditorComponent, MarkdownTheme, TUI } from "
 import { Spacer, Text, TruncatedText } from "#tui/index.js";
 import { APP_NAME } from "../../config.js";
 import { theme } from "../theme/theme.js";
-import { CompactionSummaryMessageComponent } from "./components/compaction-summary-message.js";
 import { CustomMessageComponent } from "./components/custom-message.js";
 import { DynamicBorder } from "./components/dynamic-border.js";
 import { formatAppKeyDisplay } from "./display-helpers.js";
 import { keyText } from "./components/keybinding-hints.js";
 import { AssistantMessageBlock, type AssistantMessageBlockOptions } from "./components/timeline/assistant-message-block.js";
+import { CompactionSummaryBlock } from "./components/timeline/compaction-summary-block.js";
 import type { LoadedResourcesBlock } from "./components/timeline/loaded-resources-block.js";
 import type { TimelineBlock } from "./components/timeline/base-block.js";
 import { LogoBlock } from "./components/timeline/logo-block.js";
@@ -263,10 +263,13 @@ export class Timeline {
         break;
       }
       case "compactionSummary": {
-        chatContainer.addChild(new Spacer(1));
-        const component = new CompactionSummaryMessageComponent(message, this.dependencies.getMarkdownTheme());
-        component.setExpanded(state.shell.$toolOutputExpanded.getState());
-        chatContainer.addChild(component);
+        this.pushBlock(
+          new CompactionSummaryBlock({
+            message,
+            expanded: state.shell.$toolOutputExpanded.getState(),
+            markdownTheme: this.dependencies.getMarkdownTheme(),
+          }),
+        );
         break;
       }
       case "user": {

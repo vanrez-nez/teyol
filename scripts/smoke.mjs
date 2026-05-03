@@ -38,6 +38,7 @@ import { Timeline } from "../dist/shell/tui/timeline.js";
 import {
 	AssistantMessageBlock,
 	AssistantToolBlock,
+	CompactionSummaryBlock,
 	LoadedResourcesBlock,
 	TimelineBlock,
 	UserMessageBlock,
@@ -746,6 +747,66 @@ function testTimelineStartupBlocks() {
 	assert.deepEqual(timeline.render(80), []);
 }
 
+function createCompactionSummaryMessageFixture(overrides = {}) {
+	return {
+		role: "compactionSummary",
+		summary: overrides.summary ?? "summary text",
+		tokensBefore: overrides.tokensBefore ?? 12345,
+		timestamp: overrides.timestamp ?? 1710000000000,
+	};
+}
+
+function testCompactionSummaryBlock() {
+	initTheme("dark", false);
+	const message = createCompactionSummaryMessageFixture();
+	const block = new CompactionSummaryBlock({
+		id: "compaction-1",
+		message,
+		expanded: false,
+	});
+
+	const collapsed = block.render(100).join("\n");
+	assert.match(collapsed, /\[compaction\]/);
+	assert.match(collapsed, /Compacted from 12,345 tokens/);
+	assert.match(collapsed, /to expand/);
+	assert.deepEqual(block.serialize(), {
+		type: "compaction-summary",
+		id: "compaction-1",
+		state: {
+			message,
+			expanded: false,
+		},
+	});
+
+	block.setExpanded(true);
+	const expanded = block.render(100).join("\n");
+	assert.match(expanded, /Compacted from 12,345 tokens/);
+	assert.match(expanded, /summary text/);
+	assert.deepEqual(block.serialize(), {
+		type: "compaction-summary",
+		id: "compaction-1",
+		state: {
+			message,
+			expanded: true,
+		},
+	});
+}
+
+function testTimelineCompactionSummaryBlock() {
+	initTheme("dark", false);
+	const { timeline, chatContainer } = createTimelineForTest();
+	timeline.addMessage(createCompactionSummaryMessageFixture());
+
+	assert.equal(chatContainer.children.length, 1);
+	const collapsed = timeline.render(100).join("\n");
+	assert.match(collapsed, /Compacted from 12,345 tokens/);
+	assert.doesNotMatch(collapsed, /summary text/);
+
+	timeline.setToolsExpanded(true);
+	const expanded = timeline.render(100).join("\n");
+	assert.match(expanded, /summary text/);
+}
+
 function testLoadedResourcesBlock() {
 	initTheme("dark", false);
 	const block = new LoadedResourcesBlock({
@@ -1228,6 +1289,8 @@ testUiDescriptorContracts();
 testTimelineBlockBaseContract();
 testTimelineBlockRendering();
 testTimelineStartupBlocks();
+testCompactionSummaryBlock();
+testTimelineCompactionSummaryBlock();
 testLoadedResourcesBlock();
 testShowLoadedResourcesBuildsBlock();
 testShowLoadedResourcesDiagnosticsWhenQuiet();
