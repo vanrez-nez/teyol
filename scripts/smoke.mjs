@@ -223,6 +223,95 @@ function testUiDescriptorContracts() {
 	}
 }
 
+async function testLocalOllamaCompactionWithoutApiKey() {
+	const services = makeServices("local-ollama-compaction");
+	writeFileSync(
+		join(services.root, "models.json"),
+		JSON.stringify(
+			{
+				providers: {
+					ollama: {
+						baseUrl: "http://exena.local:11434/api",
+						models: [{ id: "gemma4:e4b" }],
+					},
+				},
+			},
+			null,
+			2,
+		),
+		"utf8",
+	);
+	services.modelRegistry.refresh();
+	const model = services.modelRegistry.find("ollama", "gemma4:e4b");
+	assert.ok(model);
+	assert.equal(services.modelRegistry.hasConfiguredAuth(model), true);
+	const requestAuth = await services.modelRegistry.getApiKeyAndHeaders(model);
+	assert.equal(requestAuth.ok, true);
+	assert.equal(requestAuth.apiKey, undefined);
+
+	const resourceLoader = new DefaultResourceLoader({
+		cwd: services.root,
+		agentDir: services.agentDir,
+		settingsManager: services.settingsManager,
+		extensionFactories: [
+			(ai) => {
+				ai.on("session_before_compact", (event) => ({
+					compaction: {
+						summary: "local ollama compaction",
+						firstKeptEntryId: event.preparation.firstKeptEntryId,
+						tokensBefore: event.preparation.tokensBefore,
+					},
+				}));
+			},
+		],
+	});
+	await resourceLoader.reload();
+	const { session } = await createAgentSession({
+		cwd: services.root,
+		agentDir: services.agentDir,
+		authStorage: services.authStorage,
+		settingsManager: services.settingsManager,
+		modelRegistry: services.modelRegistry,
+		resourceLoader,
+		sessionManager: SessionManager.inMemory(),
+		model,
+	});
+	try {
+		session.sessionManager.appendMessage({
+			role: "user",
+			content: [{ type: "text", text: "Earlier session context " + "x".repeat(1200) }],
+			timestamp: Date.now(),
+		});
+		session.sessionManager.appendMessage({
+			role: "assistant",
+			content: [{ type: "text", text: "Earlier assistant response " + "y".repeat(1200) }],
+			api: model.api,
+			provider: model.provider,
+			model: model.id,
+			timestamp: Date.now(),
+		});
+		session.sessionManager.appendMessage({
+			role: "user",
+			content: [{ type: "text", text: "Recent user message " + "z".repeat(1200) }],
+			timestamp: Date.now(),
+		});
+		session.sessionManager.appendMessage({
+			role: "assistant",
+			content: [{ type: "text", text: "Recent assistant response " + "w".repeat(1200) }],
+			api: model.api,
+			provider: model.provider,
+			model: model.id,
+			timestamp: Date.now(),
+		});
+
+		const result = await session.compact();
+		assert.equal(result.summary, "local ollama compaction");
+		assert.equal(session.sessionManager.getEntries().at(-1)?.type, "compaction");
+	} finally {
+		session.dispose();
+	}
+}
+
 async function testBuiltInCommandDispatch() {
 	const calls = [];
 	const commands = [
@@ -595,6 +684,7 @@ await testExtensionToolsActiveByDefault();
 await testNoToolsDisablesExtensionTools();
 await testToolAllowlist();
 await testExtensionModuleCanImportTeyol();
+await testLocalOllamaCompactionWithoutApiKey();
 await testBuiltInCommandDispatch();
 await testInteractiveAutocompleteContracts();
 testHotkeyHelpContracts();

@@ -338,7 +338,7 @@ export class AgentSession {
   }
 
   private async _getRequiredRequestAuth(model: Model<any>): Promise<{
-    apiKey: string;
+    apiKey?: string;
     headers?: Record<string, string>;
   }> {
     const result = await this._modelRegistry.getApiKeyAndHeaders(model);
@@ -350,6 +350,12 @@ export class AgentSession {
     }
     if (result.apiKey) {
       return { apiKey: result.apiKey, headers: result.headers };
+    }
+    if (result.headers && Object.keys(result.headers).length > 0) {
+      return { headers: result.headers };
+    }
+    if (this._modelRegistry.hasConfiguredAuth(model)) {
+      return {};
     }
 
     const isOAuth = this._modelRegistry.isUsingOAuth(model);
@@ -1864,8 +1870,10 @@ export class AgentSession {
         return;
       }
 
-      const authResult = await this._modelRegistry.getApiKeyAndHeaders(this.model);
-      if (!authResult.ok || !authResult.apiKey) {
+      let requestAuth: { apiKey?: string; headers?: Record<string, string> };
+      try {
+        requestAuth = await this._getRequiredRequestAuth(this.model);
+      } catch {
         this._emit({
           type: "compaction_end",
           reason,
@@ -1875,7 +1883,7 @@ export class AgentSession {
         });
         return;
       }
-      const { apiKey, headers } = authResult;
+      const { apiKey, headers } = requestAuth;
 
       const pathEntries = this.sessionManager.getBranch();
 
