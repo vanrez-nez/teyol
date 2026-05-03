@@ -6,7 +6,7 @@ import type { SourceInfo } from "#shell/runtime/source-info.js";
 import type { Skill } from "#shell/runtime/skills.js";
 import type { PromptTemplate } from "#shell/runtime/prompt-templates.js";
 import { getBuiltInCommandNames, getBuiltInSlashCommands } from "./built-in.js";
-import type { TuiCommandContext } from "./types.js";
+import type { RegisteredCommand } from "./types.js";
 
 export interface BuildAutocompleteInput {
 	promptTemplates: ReadonlyArray<PromptTemplate>;
@@ -15,7 +15,7 @@ export interface BuildAutocompleteInput {
 	extensionRunner: ExtensionRunner;
 	cwd: string;
 	fdPath?: string;
-	commandContext: TuiCommandContext;
+	commands: ReadonlyArray<RegisteredCommand>;
 }
 
 export interface BuildAutocompleteResult {
@@ -50,8 +50,11 @@ function prefixAutocompleteDescription(description: string | undefined, sourceIn
 	return description ? `[${sourceTag}] ${description}` : `[${sourceTag}]`;
 }
 
-export function getBuiltInCommandConflictDiagnostics(extensionRunner: ExtensionRunner): ResourceDiagnostic[] {
-	const builtinNames = getBuiltInCommandNames();
+export function getBuiltInCommandConflictDiagnostics(
+	extensionRunner: ExtensionRunner,
+	commands: ReadonlyArray<RegisteredCommand>,
+): ResourceDiagnostic[] {
+	const builtinNames = getBuiltInCommandNames(commands);
 	return extensionRunner
 		.getRegisteredCommands()
 		.filter((command) => builtinNames.has(command.name))
@@ -66,7 +69,7 @@ export function getBuiltInCommandConflictDiagnostics(extensionRunner: ExtensionR
 }
 
 export function buildAutocomplete(input: BuildAutocompleteInput): BuildAutocompleteResult {
-	const slashCommands: SlashCommand[] = getBuiltInSlashCommands(input.commandContext);
+	const slashCommands: SlashCommand[] = getBuiltInSlashCommands(input.commands);
 
 	const templateCommands: SlashCommand[] = input.promptTemplates.map((cmd) => ({
 		name: cmd.name,
@@ -74,7 +77,7 @@ export function buildAutocomplete(input: BuildAutocompleteInput): BuildAutocompl
 		...(cmd.argumentHint && { argumentHint: cmd.argumentHint }),
 	}));
 
-	const builtinCommandNames = getBuiltInCommandNames();
+	const builtinCommandNames = getBuiltInCommandNames(input.commands);
 	const extensionCommands: SlashCommand[] = input.extensionRunner
 		.getRegisteredCommands()
 		.filter((cmd) => !builtinCommandNames.has(cmd.name))

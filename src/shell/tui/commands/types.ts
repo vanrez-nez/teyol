@@ -7,29 +7,26 @@ export interface CommandInvocation {
 	args: string;
 }
 
-export interface TuiCommandContext {
-	openSettings(): void;
-	openScopedModels(): Promise<void>;
-	runModelCommand(text: string): Promise<void>;
-	runNameCommand(text: string): void;
-	runSessionCommand(text: string): Promise<void>;
-	showHotkeys(): void;
-	openAuth(mode: "login" | "logout"): Promise<void>;
-	reload(): Promise<void>;
-	runLogCommand(text: string): Promise<void>;
-	shutdown(): Promise<void>;
-	getModelArgumentCompletions(prefix: string, valuePrefix?: string): AutocompleteItem[] | null;
-	isDevMode(): boolean;
-}
-
-export interface TuiCommand {
+export interface TuiCommand<Dependencies> {
 	name: string;
 	aliases?: ReadonlyArray<string>;
 	description: string;
 	argumentHint?: string;
-	isVisible?(context: TuiCommandContext): boolean;
-	complete?(context: TuiCommandContext, invocation: CommandInvocation): AutocompleteItem[] | null;
-	execute(context: TuiCommandContext, invocation: CommandInvocation): void | Promise<void>;
+	isVisible?(dependencies: Dependencies): boolean;
+	complete?(dependencies: Dependencies, invocation: CommandInvocation): AutocompleteItem[] | null;
+	execute(dependencies: Dependencies, invocation: CommandInvocation): void | Promise<void>;
+}
+
+export interface RegisteredCommand {
+	command: TuiCommand<any>;
+	dependencies: any;
+}
+
+export function registerCommand<Dependencies>(
+	command: TuiCommand<Dependencies>,
+	dependencies: Dependencies,
+): RegisteredCommand {
+	return { command, dependencies };
 }
 
 export function parseCommandInvocation(text: string): Omit<CommandInvocation, "canonicalName"> | null {
@@ -45,16 +42,17 @@ export function parseCommandInvocation(text: string): Omit<CommandInvocation, "c
 	};
 }
 
-export function commandNames(command: TuiCommand): ReadonlyArray<string> {
+export function commandNames(command: TuiCommand<any>): ReadonlyArray<string> {
 	return [command.name, ...(command.aliases ?? [])];
 }
 
-export function matchesCommand(command: TuiCommand, name: string): boolean {
+export function matchesCommand(command: TuiCommand<any>, name: string): boolean {
 	return commandNames(command).includes(name);
 }
 
-export function toSlashCommand(command: TuiCommand, context: TuiCommandContext): SlashCommand | null {
-	if (command.isVisible && !command.isVisible(context)) {
+export function toSlashCommand(registration: RegisteredCommand): SlashCommand | null {
+	const { command, dependencies } = registration;
+	if (command.isVisible && !command.isVisible(dependencies)) {
 		return null;
 	}
 
@@ -65,7 +63,7 @@ export function toSlashCommand(command: TuiCommand, context: TuiCommandContext):
 		...(command.complete
 			? {
 					getArgumentCompletions: (prefix: string): AutocompleteItem[] | null =>
-						command.complete!(context, {
+						command.complete!(dependencies, {
 							raw: `/${command.name}${prefix ? ` ${prefix}` : ""}`,
 							name: command.name,
 							canonicalName: command.name,

@@ -24,6 +24,7 @@ import { initTheme, theme } from "../dist/shell/theme/theme.js";
 import { createCliState } from "../dist/shell/tui/state/index.js";
 import { dispatchBuiltInCommand } from "../dist/shell/tui/commands/built-in.js";
 import { buildAutocomplete, getBuiltInCommandConflictDiagnostics } from "../dist/shell/tui/commands/autocomplete.js";
+import { registerCommand } from "../dist/shell/tui/commands/types.js";
 import {
 	buildScopeGroups,
 	formatAppKeyDisplay,
@@ -224,24 +225,29 @@ function testUiDescriptorContracts() {
 
 async function testBuiltInCommandDispatch() {
 	const calls = [];
-	const context = {
-		openSettings: () => calls.push(["settings"]),
-		openScopedModels: async () => calls.push(["scopedModels"]),
-		runModelCommand: async (text) => calls.push(["model", text]),
-		runNameCommand: (text) => calls.push(["name", text]),
-		runSessionCommand: async (text) => calls.push(["session", text]),
-		showHotkeys: () => calls.push(["hotkeys"]),
-		openAuth: async (mode) => calls.push(["auth", mode]),
-		reload: async () => calls.push(["reload"]),
-		runLogCommand: async (text) => calls.push(["log", text]),
-		shutdown: async () => calls.push(["exit"]),
-		getModelArgumentCompletions: () => null,
-		isDevMode: () => true,
-	};
+	const commands = [
+		registerCommand(
+			{
+				name: "model",
+				description: "model",
+				execute: async (dependencies, invocation) => dependencies.calls.push(["model", invocation.raw]),
+			},
+			{ calls },
+		),
+		registerCommand(
+			{
+				name: "exit",
+				aliases: ["quit"],
+				description: "exit",
+				execute: async (dependencies) => dependencies.calls.push(["exit"]),
+			},
+			{ calls },
+		),
+	];
 
-	assert.equal(await dispatchBuiltInCommand("/model select openrouter/auto", context), true);
-	assert.equal(await dispatchBuiltInCommand("/quit", context), true);
-	assert.equal(await dispatchBuiltInCommand("/unknown", context), false);
+	assert.equal(await dispatchBuiltInCommand("/model select openrouter/auto", commands), true);
+	assert.equal(await dispatchBuiltInCommand("/quit", commands), true);
+	assert.equal(await dispatchBuiltInCommand("/unknown", commands), false);
 	assert.deepEqual(calls, [
 		["model", "/model select openrouter/auto"],
 		["exit"],
@@ -268,27 +274,41 @@ async function testInteractiveAutocompleteContracts() {
 		},
 	};
 
-	const diagnostics = getBuiltInCommandConflictDiagnostics(extensionRunner);
+	const commands = [
+		registerCommand(
+			{
+				name: "session",
+				description: "session",
+				execute: () => {},
+			},
+			{},
+		),
+		registerCommand(
+			{
+				name: "model",
+				description: "model",
+				complete: (dependencies, invocation) =>
+					invocation.args === "select open"
+						? [{ value: dependencies.value, label: dependencies.value, description: "model" }]
+						: null,
+				execute: () => {},
+			},
+			{ value: "openrouter/auto" },
+		),
+		registerCommand(
+			{
+				name: "log",
+				description: "log",
+				complete: () => [{ value: "enable", label: "enable", description: "Start writing log entries" }],
+				execute: () => {},
+			},
+			{},
+		),
+	];
+
+	const diagnostics = getBuiltInCommandConflictDiagnostics(extensionRunner, commands);
 	assert.equal(diagnostics.length, 1);
 	assert.match(diagnostics[0].message, /conflicts with built-in interactive command/);
-
-	const commandContext = {
-		openSettings: () => {},
-		openScopedModels: async () => {},
-		runModelCommand: async () => {},
-		runNameCommand: () => {},
-		runSessionCommand: async () => {},
-		showHotkeys: () => {},
-		openAuth: async () => {},
-		reload: async () => {},
-		runLogCommand: async () => {},
-		shutdown: async () => {},
-		getModelArgumentCompletions: (prefix, valuePrefix) =>
-			prefix === "open" && valuePrefix === "select "
-				? [{ value: "openrouter/auto", label: "openrouter/auto", description: "model" }]
-				: null,
-		isDevMode: () => true,
-	};
 
 	const result = buildAutocomplete({
 		promptTemplates: [],
@@ -303,7 +323,7 @@ async function testInteractiveAutocompleteContracts() {
 		enableSkillCommands: true,
 		extensionRunner,
 		cwd: repoRoot,
-		commandContext,
+		commands,
 	});
 	assert.equal(typeof result.provider.getSuggestions, "function");
 	assert.deepEqual(Array.from(result.skillCommands.entries()), [["skill:brief", "/tmp/SKILL.md"]]);

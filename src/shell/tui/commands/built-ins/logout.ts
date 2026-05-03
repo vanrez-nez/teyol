@@ -1,9 +1,10 @@
 import type { TuiCommand } from "../types.js";
+import { type AuthCommandDependencies, showLogoutProviderSelector } from "./auth.js";
 
-export const logoutCommand: TuiCommand = {
+export const logoutCommand: TuiCommand<AuthCommandDependencies> = {
 	name: "logout",
 	description: "Remove provider authentication",
-	execute(context) {
-		return context.openAuth("logout");
+	execute(dependencies) {
+		showLogoutProviderSelector(dependencies);
 	},
 };
