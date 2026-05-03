@@ -107,7 +107,7 @@ async function createSessionWithTools(toolNames, options = {}) {
 	return result.session;
 }
 
-async function testNoToolsByDefault() {
+async function testShippedHelpToolActiveByDefault() {
 	const services = makeServices("no-tools");
 	const { session } = await createAgentSession({
 		cwd: services.root,
@@ -118,7 +118,7 @@ async function testNoToolsByDefault() {
 		sessionManager: SessionManager.inMemory(),
 	});
 	try {
-		assert.deepEqual(session.getActiveToolNames(), []);
+		assert.deepEqual(session.getActiveToolNames(), ["teyol_help"]);
 	} finally {
 		session.dispose();
 	}
@@ -127,7 +127,7 @@ async function testNoToolsByDefault() {
 async function testExtensionToolsActiveByDefault() {
 	const session = await createSessionWithTools(["echo"]);
 	try {
-		assert.deepEqual(session.getActiveToolNames(), ["echo"]);
+		assert.deepEqual(session.getActiveToolNames(), ["teyol_help", "echo"]);
 	} finally {
 		session.dispose();
 	}
@@ -1209,7 +1209,7 @@ function testCliStateShellAndFooter() {
 	}
 }
 
-await testNoToolsByDefault();
+await testShippedHelpToolActiveByDefault();
 await testExtensionToolsActiveByDefault();
 await testNoToolsDisablesExtensionTools();
 await testToolAllowlist();
