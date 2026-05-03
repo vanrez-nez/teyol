@@ -83,6 +83,7 @@ import { showLoadedResources } from "./extensions/loaded-resources.js";
 import { setupBuiltInHotkeys } from "./hotkeys/built-in.js";
 import { ShellLayoutComponent } from "./layout.js";
 import { Timeline } from "./timeline.js";
+import { TimelineComposition } from "./timeline-composition.js";
 
 /**
  * Options for InteractiveMode initialization.
@@ -107,6 +108,7 @@ export class InteractiveMode {
   private state: CliState;
   private layout: ShellLayoutComponent;
   private timeline: Timeline;
+  private timelineComposition: TimelineComposition;
   private ui: TUI;
   private chatContainer: Container;
   private pendingMessagesContainer: Container;
@@ -199,8 +201,10 @@ export class InteractiveMode {
     });
     this.editor = this.defaultEditor;
     this.layout.restoreEditorHost(this.editor as Component);
-    this.timeline = new Timeline({
+    this.timeline = new Timeline(this.chatContainer);
+    this.timelineComposition = new TimelineComposition({
       ui: this.ui,
+      timeline: this.timeline,
       chatContainer: this.chatContainer,
       pendingMessagesContainer: this.pendingMessagesContainer,
       statusContainer: this.statusContainer,
@@ -296,8 +300,8 @@ export class InteractiveMode {
         getEditor: () => this.editor,
         refreshAutocomplete: () => this.setupAutocompleteProvider(),
         rebuildChatFromMessages: () => this.rebuildChatFromMessages(),
-        setToolImagesVisible: (show) => this.timeline.setToolImagesVisible(show),
-        setToolImageWidthCells: (width) => this.timeline.setToolImageWidthCells(width),
+        setToolImagesVisible: (show) => this.timelineComposition.setToolImagesVisible(show),
+        setToolImageWidthCells: (width) => this.timelineComposition.setToolImageWidthCells(width),
         updateEditorBorderColor: () => this.updateEditorBorderColor(),
       }),
       registerCommand(modelCommand, {
@@ -405,7 +409,7 @@ export class InteractiveMode {
           setPaddingX?(padding: number): void;
           setAutocompleteMaxVisible?(maxVisible: number): void;
         },
-      startupContent: this.timeline.getStartupContent(),
+      startupContent: this.timelineComposition.getStartupContent(),
       resetExtensionUI: () => this.interactiveExtensions.reset(),
       refreshAutocomplete: () => this.setupAutocompleteProvider(),
       setupExtensionShortcuts: () => this.interactiveExtensions.setupShortcuts(this.runtimeHost.session.extensionRunner),
@@ -490,7 +494,7 @@ export class InteractiveMode {
         "dim",
         `Teyol can explain its own features and look up its docs. Ask it how to use or extend Teyol.`,
       );
-      this.timeline.renderStartupContent({
+      this.timelineComposition.renderStartupContent({
         versionLine,
         expandedInstructions,
         compactInstructions,
@@ -499,7 +503,7 @@ export class InteractiveMode {
         expanded: this.getStartupExpansionState(),
       });
     } else {
-      this.timeline.renderStartupContent(undefined);
+      this.timelineComposition.renderStartupContent(undefined);
     }
 
     this.interactiveExtensions.renderWidgets(); // Initialize with default spacer
@@ -719,7 +723,7 @@ export class InteractiveMode {
       force: options?.force,
       showDiagnosticsWhenQuiet: options?.showDiagnosticsWhenQuiet,
     });
-    this.timeline.setLoadedResourcesBlock(block);
+    this.timelineComposition.setLoadedResourcesBlock(block);
   }
 
   /**
@@ -768,7 +772,7 @@ export class InteractiveMode {
   }
 
   private renderCurrentSessionState(): void {
-    this.timeline.clear();
+    this.timelineComposition.clear();
     this.compactionQueuedMessages = [];
     this.renderInitialMessages();
   }
@@ -806,7 +810,7 @@ export class InteractiveMode {
       this.loadingAnimation.stop();
       this.loadingAnimation = undefined;
     }
-    this.timeline.clearStatus();
+    this.timelineComposition.clearStatus();
   }
 
   private setWorkingVisible(visible: boolean): void {
@@ -817,9 +821,9 @@ export class InteractiveMode {
       return;
     }
     if (this.runtimeHost.session.isStreaming && !this.loadingAnimation) {
-      this.timeline.clearStatus();
+      this.timelineComposition.clearStatus();
       this.loadingAnimation = this.createWorkingLoader();
-      this.timeline.addStatusComponent(this.loadingAnimation);
+      this.timelineComposition.addStatusComponent(this.loadingAnimation);
     }
     this.ui.requestRender();
   }
@@ -838,7 +842,7 @@ export class InteractiveMode {
   }
 
   private setHiddenThinkingLabel(label?: string): void {
-    this.timeline.setHiddenThinkingLabel(label);
+    this.timelineComposition.setHiddenThinkingLabel(label);
   }
 
   private async promptForMissingSessionCwd(error: MissingSessionCwdError): Promise<string | undefined> {
@@ -969,7 +973,7 @@ export class InteractiveMode {
         this.stopWorkingLoader();
         if (this.state.shell.$working.getState().visible) {
           this.loadingAnimation = this.createWorkingLoader();
-          this.timeline.addStatusComponent(this.loadingAnimation);
+          this.timelineComposition.addStatusComponent(this.loadingAnimation);
         }
         this.ui.requestRender();
         break;
@@ -987,43 +991,43 @@ export class InteractiveMode {
 
       case "message_start":
         if (event.message.role === "custom") {
-          this.timeline.addMessage(event.message);
+          this.timelineComposition.addMessage(event.message);
           this.ui.requestRender();
         } else if (event.message.role === "user") {
-          this.timeline.addMessage(event.message);
+          this.timelineComposition.addMessage(event.message);
           this.updatePendingMessagesDisplay();
           this.ui.requestRender();
         } else if (event.message.role === "assistant") {
-          this.timeline.startAssistantMessage(event.message);
+          this.timelineComposition.startAssistantMessage(event.message);
         }
         break;
 
       case "message_update":
         if (event.message.role === "assistant") {
-          this.timeline.updateAssistantMessage(event.message);
+          this.timelineComposition.updateAssistantMessage(event.message);
         }
         break;
 
       case "message_end":
         if (event.message.role === "user") break;
         if (event.message.role === "assistant") {
-          this.timeline.finishAssistantMessage(event.message);
+          this.timelineComposition.finishAssistantMessage(event.message);
         }
         this.ui.requestRender();
         break;
 
       case "tool_execution_start": {
-        this.timeline.startToolExecution(event);
+        this.timelineComposition.startTool(event.toolCallId, event.toolName, event.args);
         break;
       }
 
       case "tool_execution_update": {
-        this.timeline.updateToolExecution(event);
+        this.timelineComposition.updateToolPartialResult(event.toolCallId, event.partialResult);
         break;
       }
 
       case "tool_execution_end": {
-        this.timeline.finishToolExecution(event);
+        this.timelineComposition.finishTool(event.toolCallId, event.result, event.isError);
         break;
       }
 
@@ -1034,10 +1038,9 @@ export class InteractiveMode {
         if (this.loadingAnimation) {
           this.loadingAnimation.stop();
           this.loadingAnimation = undefined;
-          this.timeline.clearStatus();
+          this.timelineComposition.clearStatus();
         }
-        this.timeline.removeStreamingAssistant();
-        this.timeline.clearPendingTools();
+        this.timelineComposition.removeStreamingAssistant();
 
         await this.checkShutdownRequested();
 
@@ -1053,7 +1056,7 @@ export class InteractiveMode {
         this.defaultEditor.onEscape = () => {
           this.runtimeHost.session.abortCompaction();
         };
-        this.timeline.clearStatus();
+        this.timelineComposition.clearStatus();
         const cancelHint = `(${keyText("app.interrupt")} to cancel)`;
         const label =
           event.reason === "manual"
@@ -1065,7 +1068,7 @@ export class InteractiveMode {
           (text) => theme.fg("muted", text),
           label,
         );
-        this.timeline.addStatusComponent(this.autoCompactionLoader);
+        this.timelineComposition.addStatusComponent(this.autoCompactionLoader);
         this.ui.requestRender();
         break;
       }
@@ -1081,7 +1084,7 @@ export class InteractiveMode {
         if (this.autoCompactionLoader) {
           this.autoCompactionLoader.stop();
           this.autoCompactionLoader = undefined;
-          this.timeline.clearStatus();
+          this.timelineComposition.clearStatus();
         }
         if (event.aborted) {
           if (event.reason === "manual") {
@@ -1090,9 +1093,9 @@ export class InteractiveMode {
             this.showStatus("Auto-compaction cancelled");
           }
         } else if (event.result) {
-          this.timeline.clear();
+          this.timelineComposition.clear();
           this.rebuildChatFromMessages();
-          this.timeline.addMessage(
+          this.timelineComposition.addMessage(
             createCompactionSummaryMessage(event.result.summary, event.result.tokensBefore, new Date().toISOString()),
           );
           this.footer.invalidate();
@@ -1100,7 +1103,7 @@ export class InteractiveMode {
           if (event.reason === "manual") {
             this.showError(event.errorMessage);
           } else {
-            this.timeline.showRawError(event.errorMessage);
+            this.timelineComposition.showRawError(event.errorMessage);
           }
         }
         void this.flushCompactionQueue({ willRetry: event.willRetry });
@@ -1115,7 +1118,7 @@ export class InteractiveMode {
           this.runtimeHost.session.abortRetry();
         };
         // Show retry indicator
-        this.timeline.clearStatus();
+        this.timelineComposition.clearStatus();
         this.retryCountdown?.dispose();
         const retryMessage = (seconds: number) =>
           `Retrying (${event.attempt}/${event.maxAttempts}) in ${seconds}s... (${keyText("app.interrupt")} to cancel)`;
@@ -1135,7 +1138,7 @@ export class InteractiveMode {
             this.retryCountdown = undefined;
           },
         );
-        this.timeline.addStatusComponent(this.retryLoader);
+        this.timelineComposition.addStatusComponent(this.retryLoader);
         this.ui.requestRender();
         break;
       }
@@ -1154,7 +1157,7 @@ export class InteractiveMode {
         if (this.retryLoader) {
           this.retryLoader.stop();
           this.retryLoader = undefined;
-          this.timeline.clearStatus();
+          this.timelineComposition.clearStatus();
         }
         // Show error only on final failure (success shows normal response)
         if (!event.success) {
@@ -1167,11 +1170,11 @@ export class InteractiveMode {
   }
 
   private showStatus(message: string): void {
-    this.timeline.showStatus(message);
+    this.timelineComposition.showStatus(message);
   }
 
   renderInitialMessages(): void {
-    this.timeline.renderInitialMessages();
+    this.timelineComposition.renderInitialMessages();
   }
 
   async getUserInput(): Promise<string> {
@@ -1184,7 +1187,7 @@ export class InteractiveMode {
   }
 
   private rebuildChatFromMessages(): void {
-    this.timeline.rebuildFromMessages();
+    this.timelineComposition.rebuildFromMessages();
   }
 
   // =========================================================================
@@ -1378,14 +1381,14 @@ export class InteractiveMode {
   }
 
   private setToolsExpanded(expanded: boolean): void {
-    this.timeline.setToolsExpanded(expanded);
+    this.timelineComposition.setToolsExpanded(expanded);
   }
 
   private toggleThinkingBlockVisibility(): void {
     this.state.shell.setHideThinkingBlock(!this.state.shell.$hideThinkingBlock.getState());
     this.runtimeHost.session.settingsManager.setHideThinkingBlock(this.state.shell.$hideThinkingBlock.getState());
 
-    this.timeline.rebuildForThinkingVisibility();
+    this.timelineComposition.rebuildForThinkingVisibility();
 
     this.showStatus(`Thinking blocks: ${this.state.shell.$hideThinkingBlock.getState() ? "hidden" : "visible"}`);
   }
@@ -1448,19 +1451,19 @@ export class InteractiveMode {
   }
 
   showError(errorMessage: string): void {
-    this.timeline.showError(errorMessage);
+    this.timelineComposition.showError(errorMessage);
   }
 
   showWarning(warningMessage: string): void {
-    this.timeline.showWarning(warningMessage);
+    this.timelineComposition.showWarning(warningMessage);
   }
 
   showNewVersionNotification(newVersion: string): void {
-    this.timeline.showNewVersionNotification(newVersion);
+    this.timelineComposition.showNewVersionNotification(newVersion);
   }
 
   showPackageUpdateNotification(packages: string[]): void {
-    this.timeline.showPackageUpdateNotification(packages);
+    this.timelineComposition.showPackageUpdateNotification(packages);
   }
 
   /**
@@ -1484,7 +1487,7 @@ export class InteractiveMode {
   }
 
   private updatePendingMessagesDisplay(): void {
-    this.timeline.updatePendingMessagesDisplay(this.getAllQueuedMessages());
+    this.timelineComposition.updatePendingMessagesDisplay(this.getAllQueuedMessages());
   }
 
   private restoreQueuedMessagesToEditor(options?: { abort?: boolean; currentText?: string }): number {

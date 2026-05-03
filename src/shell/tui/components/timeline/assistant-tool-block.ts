@@ -22,6 +22,7 @@ export interface AssistantToolBlockOptions extends TimelineBlockOptions {
 	args: any;
 	showImages?: boolean;
 	imageWidthCells?: number;
+	expanded?: boolean;
 	toolDefinition?: ToolDefinition<any, any>;
 	ui: TUI;
 	cwd: string;
@@ -46,7 +47,7 @@ export class AssistantToolBlock extends TimelineBlock {
 	private toolName: string;
 	private toolCallId: string;
 	private args: any;
-	private expanded = false;
+	private expanded: boolean;
 	private showImages: boolean;
 	private imageWidthCells: number;
 	private isPartial = true;
@@ -73,6 +74,7 @@ export class AssistantToolBlock extends TimelineBlock {
 		this.builtInToolDefinition = createAllToolDefinitions(options.cwd)[options.toolName];
 		this.showImages = options.showImages ?? true;
 		this.imageWidthCells = options.imageWidthCells ?? 60;
+		this.expanded = options.expanded ?? false;
 		this.ui = options.ui;
 		this.cwd = options.cwd;
 	}
