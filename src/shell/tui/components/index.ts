@@ -38,7 +38,13 @@ export {
 	type LoadedResourcesSection,
 	type SerializedLoadedResourcesBlock,
 } from "./timeline/loaded-resources-block.js";
-export { TimelineBlock, type TimelineBlockEdges, type TimelineBlockOptions, type TimelineBlockPresentation } from "./timeline/base-block.js";
+export {
+	TimelineBlock,
+	type SerializedTimelineBlock,
+	type TimelineBlockEdges,
+	type TimelineBlockOptions,
+	type TimelineBlockPresentation,
+} from "./timeline/base-block.js";
 export { loadAsciiLogo, LogoBlock, type LogoBlockOptions, type LogoBlockState, type SerializedLogoBlock } from "./timeline/logo-block.js";
 export { StartupBlock, type SerializedStartupBlock, type StartupBlockOptions, type StartupBlockState } from "./timeline/startup-block.js";
 export {

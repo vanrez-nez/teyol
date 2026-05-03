@@ -79,6 +79,21 @@ export class AssistantMessageBlock extends TimelineBlock {
 		return [...this.toolBlocks.values()];
 	}
 
+	override findBlockById(id: string): TimelineBlock | undefined {
+		if (this.id === id) {
+			return this;
+		}
+
+		for (const block of this.toolBlocks.values()) {
+			const found = block.findBlockById(id);
+			if (found) {
+				return found;
+			}
+		}
+
+		return super.findBlockById(id);
+	}
+
 	ensureToolBlock(toolCall: ToolCall): AssistantToolBlock {
 		const existing = this.toolBlocks.get(toolCall.id);
 		if (existing) {

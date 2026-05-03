@@ -100,6 +100,17 @@ export class Timeline {
 		this.blocks = this.blocks.filter((existingBlock) => existingBlock !== block);
 	}
 
+	findBlockById(id: string): TimelineBlock | undefined {
+		for (const block of this.blocks) {
+			const found = block.findBlockById(id);
+			if (found) {
+				return found;
+			}
+		}
+
+		return undefined;
+	}
+
 	render(width: number): string[] {
 		const maxVisibleBlocks = Number.isFinite(this.maxVisibleBlocks)
 			? Math.max(0, Math.floor(this.maxVisibleBlocks))

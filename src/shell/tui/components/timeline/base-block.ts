@@ -27,12 +27,19 @@ export interface TimelineBlockTerminalPresentation {
 }
 
 export interface TimelineBlockOptions {
+	/** Stable block identity. Omit for a new block; pass only when restoring a serialized block. */
 	id?: string;
 	margin?: TimelineBlockEdges;
 	padding?: TimelineBlockEdges;
 	border?: TimelineBlockEdges;
 	background?: ThemeBg;
 	terminal?: Partial<TimelineBlockTerminalPresentation>;
+}
+
+export interface SerializedTimelineBlock<TState = unknown> {
+	type: string;
+	id: string;
+	state?: TState;
 }
 
 export abstract class TimelineBlock extends Container {
@@ -101,6 +108,23 @@ export abstract class TimelineBlock extends Container {
 		this.parent?.markDirty();
 	}
 
+	findBlockById(id: string): TimelineBlock | undefined {
+		if (this.id === id) {
+			return this;
+		}
+
+		for (const child of this.children) {
+			if (child instanceof TimelineBlock) {
+				const found = child.findBlockById(id);
+				if (found) {
+					return found;
+				}
+			}
+		}
+
+		return undefined;
+	}
+
 	override render(width: number): string[] {
 		const targetWidth = Math.max(1, width);
 		if (!this.dirty && this.bufferWidth === targetWidth) {
@@ -149,7 +173,7 @@ export abstract class TimelineBlock extends Container {
 		return this.presentation;
 	}
 
-	abstract serialize(): object;
+	abstract serialize(): SerializedTimelineBlock;
 
 	private hasTerminalBoundaryAncestor(): boolean {
 		let parent = this.parent;

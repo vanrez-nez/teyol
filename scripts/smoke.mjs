@@ -669,11 +669,19 @@ function testTimelineBlockBaseContract() {
 	const rendered = block.render(80);
 	assert.equal(rendered.length, 1);
 	assert.ok(rendered[0].includes("hello"));
+	assert.equal(block.findBlockById("block-1"), block);
+	assert.equal(block.findBlockById("missing"), undefined);
 	assert.deepEqual(block.serialize(), {
 		type: "test-block",
 		id: "block-1",
 		state: { text: "hello" },
 	});
+
+	const parent = new TestTimelineBlock(["parent"], { id: "parent-block" });
+	const child = new TestTimelineBlock(["child"], { id: "child-block" });
+	parent.addChild(child);
+	assert.equal(parent.findBlockById("parent-block"), parent);
+	assert.equal(parent.findBlockById("child-block"), child);
 
 	const padded = new TestTimelineBlock(["x"], { padding: { left: 2, top: 1, right: 1, bottom: 1 } });
 	assert.deepEqual(padded.render(8), ["        ", "  x     ", "        "]);
@@ -717,9 +725,17 @@ function testTimelineBlockRendering() {
 	}
 
 	const { timeline } = createTimelineForTest({ maxVisibleBlocks: 2 });
-	timeline.pushBlock(new TestTimelineBlock("one", "one"));
-	timeline.pushBlock(new TestTimelineBlock("two", "two"));
-	timeline.pushBlock(new TestTimelineBlock("three", "three"));
+	const one = new TestTimelineBlock("one", "one");
+	const two = new TestTimelineBlock("two", "two");
+	const three = new TestTimelineBlock("three", "three");
+	const child = new TestTimelineBlock("nested", "nested");
+	two.addChild(child);
+	timeline.pushBlock(one);
+	timeline.pushBlock(two);
+	timeline.pushBlock(three);
+	assert.equal(timeline.findBlockById("one"), one);
+	assert.equal(timeline.findBlockById("nested"), child);
+	assert.equal(timeline.findBlockById("missing"), undefined);
 	assert.deepEqual(timeline.render(8), ["two     ", "three   "]);
 }
 
@@ -968,6 +984,19 @@ function testAssistantMessageBlock() {
 		id: "assistant-1",
 		state: { message },
 	});
+
+	const toolMessage = createAssistantMessage([
+		{ type: "toolCall", id: "tool-call-1", name: "demo", arguments: { value: 1 } },
+	]);
+	const assistantWithTool = new AssistantMessageBlock({ id: "assistant-with-tool", message: toolMessage });
+	const toolBlock = assistantWithTool.getToolBlock("tool-call-1");
+	assert.ok(toolBlock);
+	assert.equal(assistantWithTool.findBlockById("assistant-with-tool"), assistantWithTool);
+	assert.equal(assistantWithTool.findBlockById(toolBlock.id), toolBlock);
+
+	const { timeline } = createTimelineForTest();
+	timeline.pushBlock(assistantWithTool);
+	assert.equal(timeline.findBlockById(toolBlock.id), toolBlock);
 }
 
 function testAssistantMessageBlockThinkingVisibility() {
