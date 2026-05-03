@@ -5,13 +5,13 @@ import type { ExtensionCommandContext } from "#shell/runtime/extensions/index.js
 import type { KeybindingsManager } from "#shell/runtime/keybindings.js";
 import { type AutocompleteItem, type Container, type EditorComponent, Loader, Spacer, Text, type TUI } from "#tui/index.js";
 import { theme } from "../../../theme/theme.js";
-import { SessionActionsSelectorComponent, type SessionAction } from "../../components/commands/session-actions-selector.js";
+import { SessionActionsSelectorComponent, type SessionAction } from "../components/session-actions-selector.js";
 import { formatSessionInfo } from "../../display-helpers.js";
 import type { ShellLayoutComponent } from "../../layout.js";
 import type { TuiCommand } from "../types.js";
 import { SessionSelectorComponent } from "../../components/session-selector.js";
-import { TreeSelectorComponent } from "../../components/commands/tree-selector.js";
-import { UserMessageSelectorComponent } from "../../components/commands/user-message-selector.js";
+import { TreeSelectorComponent } from "../components/tree-selector.js";
+import { UserMessageSelectorComponent } from "../components/user-message-selector.js";
 import { keyText } from "../../components/keybinding-hints.js";
 import type { CustomEditor } from "../../components/custom-editor.js";
 

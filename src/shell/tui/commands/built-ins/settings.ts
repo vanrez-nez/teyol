@@ -2,7 +2,7 @@ import type { AgentSession } from "#shell/runtime/agent-session.js";
 import { type Component, type Container, type EditorComponent, Spacer, Text, type TUI } from "#tui/index.js";
 import { setTheme, getAvailableThemes, theme } from "../../../theme/theme.js";
 import type { CustomEditor } from "../../components/custom-editor.js";
-import { SettingsSelectorComponent } from "../../components/commands/settings-selector.js";
+import { SettingsSelectorComponent } from "../components/settings-selector.js";
 import type { ShellLayoutComponent } from "../../layout.js";
 import type { CliState } from "../../state/index.js";
 import type { TuiCommand } from "../types.js";

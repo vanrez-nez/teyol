@@ -13,7 +13,7 @@ import {
 } from "#tui/index.js";
 import type { WarningSettings } from "#shell/runtime/settings-manager.js";
 import { getSelectListTheme, getSettingsListTheme, theme } from "../../../theme/theme.js";
-import { DynamicBorder } from "../dynamic-border.js";
+import { DynamicBorder } from "../../components/dynamic-border.js";
 
 const SETTINGS_SUBMENU_SELECT_LIST_LAYOUT: SelectListLayoutOptions = {
 	minPrimaryColumnWidth: 12,

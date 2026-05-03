@@ -1,6 +1,6 @@
 import { Container, type SelectItem, SelectList, type SelectListLayoutOptions } from "#tui/index.js";
 import { getSelectListTheme } from "../../../theme/theme.js";
-import { DynamicBorder } from "../dynamic-border.js";
+import { DynamicBorder } from "../../components/dynamic-border.js";
 
 export type ModelAction = "select" | "fast-cycle";
 

@@ -9,7 +9,7 @@ import {
 } from "#tui/index.js";
 import type { AuthStatus, AuthStorage } from "#shell/runtime/auth-storage.js";
 import { theme } from "../../../theme/theme.js";
-import { DynamicBorder } from "../dynamic-border.js";
+import { DynamicBorder } from "../../components/dynamic-border.js";
 
 export type AuthSelectorProvider = {
 	id: string;
