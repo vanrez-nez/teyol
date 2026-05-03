@@ -411,7 +411,6 @@ export class InteractiveMode {
           setPaddingX?(padding: number): void;
           setAutocompleteMaxVisible?(maxVisible: number): void;
         },
-      startupContent: this.timelineComposition.getStartupContent(),
       resetExtensionUI: () => this.interactiveExtensions.reset(),
       refreshAutocomplete: () => this.setupAutocompleteProvider(),
       setupExtensionShortcuts: () => this.interactiveExtensions.setupShortcuts(this.runtimeHost.session.extensionRunner),

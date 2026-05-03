@@ -155,7 +155,7 @@ export abstract class TimelineBlock extends Container {
 		return this.buffer;
 	}
 
-	protected rebuildChildren(): void {}
+	protected rebuildChildren(): void { }
 
 	protected shouldRender(): boolean {
 		return true;

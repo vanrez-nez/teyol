@@ -14,7 +14,7 @@ import { keyText } from "./components/keybinding-hints.js";
 import { SkillInvocationMessageComponent } from "./components/skill-invocation-message.js";
 import { AssistantMessageBlock, type AssistantMessageBlockOptions } from "./components/timeline/assistant-message-block.js";
 import { CompactionSummaryBlock } from "./components/timeline/compaction-summary-block.js";
-import type { LoadedResourcesBlock } from "./components/timeline/loaded-resources-block.js";
+import { LoadedResourcesBlock } from "./components/timeline/loaded-resources-block.js";
 import type { TimelineBlock } from "./components/timeline/base-block.js";
 import { LogoBlock } from "./components/timeline/logo-block.js";
 import { StartupBlock } from "./components/timeline/startup-block.js";
@@ -23,14 +23,6 @@ import { formatAppKeyDisplay, getUserMessageText } from "./display-helpers.js";
 import type { ShellLayoutComponent } from "./layout.js";
 import type { CliState } from "./state/index.js";
 import { Timeline } from "./timeline.js";
-
-interface Expandable {
-	setExpanded(expanded: boolean): void;
-}
-
-function isExpandable(obj: unknown): obj is Expandable {
-	return typeof obj === "object" && obj !== null && "setExpanded" in obj && typeof obj.setExpanded === "function";
-}
 
 export interface TimelineCompositionDependencies {
 	ui: TUI;
@@ -350,20 +342,16 @@ export class TimelineComposition {
 
 	setToolsExpanded(expanded: boolean): void {
 		this.dependencies.state.shell.setToolsExpanded(expanded);
-		if (isExpandable(this.startupContent)) {
-			this.startupContent.setExpanded(expanded);
-		}
 		for (const block of this.dependencies.timeline.getBlocks()) {
-			if (isExpandable(block)) {
+			if (
+				block instanceof StartupBlock ||
+				block instanceof LoadedResourcesBlock ||
+				block instanceof CompactionSummaryBlock
+			) {
 				block.setExpanded(expanded);
 			}
 			if (block instanceof AssistantMessageBlock) {
 				block.setToolsExpanded(expanded);
-			}
-		}
-		for (const child of this.dependencies.chatContainer.children) {
-			if (isExpandable(child)) {
-				child.setExpanded(expanded);
 			}
 		}
 		this.dependencies.ui.requestRender();

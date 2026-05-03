@@ -9,14 +9,6 @@ import type { ShellLayoutComponent } from "../../layout.js";
 import type { CliState } from "../../state/index.js";
 import type { TuiCommand } from "../types.js";
 
-interface Expandable {
-	setExpanded(expanded: boolean): void;
-}
-
-function isExpandable(obj: unknown): obj is Expandable {
-	return typeof obj === "object" && obj !== null && "setExpanded" in obj && typeof obj.setExpanded === "function";
-}
-
 export interface ReloadDependencies {
 	session: AgentSession;
 	state: CliState;
@@ -29,7 +21,6 @@ export interface ReloadDependencies {
 		setPaddingX?(padding: number): void;
 		setAutocompleteMaxVisible?(maxVisible: number): void;
 	};
-	startupContent: Component | undefined;
 	resetExtensionUI(): void;
 	refreshAutocomplete(): void;
 	setupExtensionShortcuts(): void;
@@ -46,7 +37,6 @@ export async function runReload({
 		keybindings,
 		defaultEditor,
 		getEditor,
-		startupContent,
 		resetExtensionUI,
 		refreshAutocomplete,
 		setupExtensionShortcuts,
@@ -86,9 +76,6 @@ export async function runReload({
 		try {
 			await session.reload();
 			keybindings.reload();
-			if (isExpandable(startupContent)) {
-				startupContent.setExpanded(state.shell.$toolOutputExpanded.getState());
-			}
 			setRegisteredThemes(session.resourceLoader.getThemes().themes);
 			state.shell.setHideThinkingBlock(session.settingsManager.getHideThinkingBlock());
 			const themeName = session.settingsManager.getTheme();
