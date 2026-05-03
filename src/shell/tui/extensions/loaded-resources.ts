@@ -1,9 +1,8 @@
 import * as os from "node:os";
-import type { Container } from "#tui/index.js";
-import { Spacer, Text } from "#tui/index.js";
 import type { ResourceDiagnostic, ResourceLoader } from "#shell/runtime/resource-loader.js";
 import type { SourceInfo } from "#shell/runtime/source-info.js";
 import type { ExtensionRunner } from "#shell/runtime/extensions/index.js";
+import { LoadedResourcesBlock, type LoadedResourcesSection } from "../components/timeline/loaded-resources-block.js";
 import type { RegisteredCommand } from "../commands/types.js";
 import { getBuiltInCommandConflictDiagnostics } from "../commands/autocomplete.js";
 import {
@@ -19,28 +18,7 @@ import {
 } from "../display-helpers.js";
 import { type ThemeColor, theme } from "../../theme/theme.js";
 
-interface Expandable {
-	setExpanded(expanded: boolean): void;
-}
-
-class ExpandableText extends Text implements Expandable {
-	constructor(
-		private readonly getCollapsedText: () => string,
-		private readonly getExpandedText: () => string,
-		expanded = false,
-		paddingX = 0,
-		paddingY = 0,
-	) {
-		super(expanded ? getExpandedText() : getCollapsedText(), paddingX, paddingY);
-	}
-
-	setExpanded(expanded: boolean): void {
-		this.setText(expanded ? this.getExpandedText() : this.getCollapsedText());
-	}
-}
-
 export interface ShowLoadedResourcesOptions {
-	chatContainer: Container;
 	resourceLoader: ResourceLoader;
 	extensionRunner: ExtensionRunner;
 	commands: ReadonlyArray<RegisteredCommand>;
@@ -54,15 +32,14 @@ export interface ShowLoadedResourcesOptions {
 	showDiagnosticsWhenQuiet?: boolean;
 }
 
-export function showLoadedResources(options: ShowLoadedResourcesOptions): void {
+export function showLoadedResources(options: ShowLoadedResourcesOptions): LoadedResourcesBlock | undefined {
 	const showListing = options.force || options.verbose || !options.quietStartup;
 	const showDiagnostics = showListing || options.showDiagnosticsWhenQuiet === true;
 	if (!showListing && !showDiagnostics) {
-		return;
+		return undefined;
 	}
 
-	const { chatContainer, resourceLoader } = options;
-	const sectionHeader = (name: string, color: ThemeColor = "mdHeading") => theme.fg(color, `[${name}]`);
+	const { resourceLoader } = options;
 	const formatCompactList = (items: string[], formatOptions?: { sort?: boolean }): string => {
 		const labels = items.map((item) => item.trim()).filter((item) => item.length > 0);
 		if (formatOptions?.sort !== false) {
@@ -70,21 +47,14 @@ export function showLoadedResources(options: ShowLoadedResourcesOptions): void {
 		}
 		return theme.fg("dim", `  ${labels.join(", ")}`);
 	};
+	const sections: LoadedResourcesSection[] = [];
 	const addLoadedSection = (
 		name: string,
 		collapsedBody: string,
 		expandedBody = collapsedBody,
 		color: ThemeColor = "mdHeading",
 	): void => {
-		const section = new ExpandableText(
-			() => `${sectionHeader(name, color)}\n${collapsedBody}`,
-			() => `${sectionHeader(name, color)}\n${expandedBody}`,
-			options.getStartupExpansionState(),
-			0,
-			0,
-		);
-		chatContainer.addChild(section);
-		chatContainer.addChild(new Spacer(1));
+		sections.push({ title: name, collapsedBody, expandedBody, color });
 	};
 
 	const homeDir = os.homedir();
@@ -122,7 +92,6 @@ export function showLoadedResources(options: ShowLoadedResourcesOptions): void {
 	if (showListing) {
 		const contextFiles = resourceLoader.getAgentsFiles().agentsFiles;
 		if (contextFiles.length > 0) {
-			chatContainer.addChild(new Spacer(1));
 			const contextList = contextFiles.map((file) => theme.fg("dim", `  ${formatDisplayPath(file.path, homeDir)}`)).join("\n");
 			const contextCompactList = formatCompactList(
 				contextFiles.map((contextFile) => formatContextPath(contextFile.path, options.cwd, homeDir)),
@@ -197,8 +166,8 @@ export function showLoadedResources(options: ShowLoadedResourcesOptions): void {
 	}
 
 	if (showDiagnostics) {
-		addDiagnostics("Skill conflicts", skillsResult.diagnostics, chatContainer, sourceInfos, homeDir);
-		addDiagnostics("Prompt conflicts", promptsResult.diagnostics, chatContainer, sourceInfos, homeDir);
+		addDiagnostics("Skill conflicts", skillsResult.diagnostics, sections, sourceInfos, homeDir);
+		addDiagnostics("Prompt conflicts", promptsResult.diagnostics, sections, sourceInfos, homeDir);
 
 		const extensionDiagnostics: ResourceDiagnostic[] = [];
 		const extensionErrors = resourceLoader.getExtensions().errors;
@@ -210,16 +179,25 @@ export function showLoadedResources(options: ShowLoadedResourcesOptions): void {
 		extensionDiagnostics.push(...options.extensionRunner.getCommandDiagnostics());
 		extensionDiagnostics.push(...getBuiltInCommandConflictDiagnostics(options.extensionRunner, options.commands));
 		extensionDiagnostics.push(...options.extensionRunner.getShortcutDiagnostics());
-		addDiagnostics("Extension issues", extensionDiagnostics, chatContainer, sourceInfos, homeDir);
+		addDiagnostics("Extension issues", extensionDiagnostics, sections, sourceInfos, homeDir);
 
-		addDiagnostics("Theme conflicts", themesResult.diagnostics, chatContainer, sourceInfos, homeDir);
+		addDiagnostics("Theme conflicts", themesResult.diagnostics, sections, sourceInfos, homeDir);
 	}
+
+	if (sections.length === 0) {
+		return undefined;
+	}
+
+	return new LoadedResourcesBlock({
+		sections,
+		expanded: options.getStartupExpansionState(),
+	});
 }
 
 function addDiagnostics(
 	label: string,
 	diagnostics: ResourceDiagnostic[],
-	chatContainer: Container,
+	sections: LoadedResourcesSection[],
 	sourceInfos: Map<string, SourceInfo>,
 	homeDir: string,
 ): void {
@@ -227,6 +205,10 @@ function addDiagnostics(
 		return;
 	}
 	const warningLines = formatDiagnostics(diagnostics, sourceInfos, homeDir);
-	chatContainer.addChild(new Text(`${theme.fg("warning", `[${label}]`)}\n${warningLines}`, 0, 0));
-	chatContainer.addChild(new Spacer(1));
+	sections.push({
+		title: label,
+		collapsedBody: warningLines,
+		expandedBody: warningLines,
+		color: "warning",
+	});
 }

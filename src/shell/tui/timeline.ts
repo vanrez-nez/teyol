@@ -14,6 +14,7 @@ import { CustomMessageComponent } from "./components/custom-message.js";
 import { DynamicBorder } from "./components/dynamic-border.js";
 import { formatAppKeyDisplay } from "./display-helpers.js";
 import { keyText } from "./components/keybinding-hints.js";
+import type { LoadedResourcesBlock } from "./components/timeline/loaded-resources-block.js";
 import type { TimelineBlock } from "./components/timeline/base-block.js";
 import { LogoBlock } from "./components/timeline/logo-block.js";
 import { StartupBlock } from "./components/timeline/startup-block.js";
@@ -68,6 +69,7 @@ export class Timeline {
 	private lastStatusSpacer: Spacer | undefined = undefined;
 	private lastStatusText: Text | undefined = undefined;
 	private startupContent: Component | undefined = undefined;
+	private loadedResourcesBlock: LoadedResourcesBlock | undefined = undefined;
 	private readonly blockHost: Component = {
 		invalidate: () => {},
 		render: (width) => this.render(width),
@@ -91,6 +93,7 @@ export class Timeline {
 
 	clearBlocks(): void {
 		this.blocks = [];
+		this.loadedResourcesBlock = undefined;
 	}
 
 	render(width: number): string[] {
@@ -128,6 +131,28 @@ export class Timeline {
 
 		this.pushBlock(new LogoBlock({ versionLine: options.versionLine, margin: { top: 1 }, padding: { bottom: 1 } }));
 		this.pushBlock(startupBlock);
+		this.dependencies.ui.requestRender();
+	}
+
+	setLoadedResourcesBlock(block: LoadedResourcesBlock | undefined): void {
+		if (this.loadedResourcesBlock) {
+			this.blocks = this.blocks.filter((existingBlock) => existingBlock !== this.loadedResourcesBlock);
+		}
+
+		this.loadedResourcesBlock = block;
+		if (!block) {
+			this.dependencies.ui.requestRender();
+			return;
+		}
+
+		const startupIndex = this.startupContent ? this.blocks.indexOf(this.startupContent as TimelineBlock) : -1;
+		if (startupIndex >= 0) {
+			this.blocks.splice(startupIndex + 1, 0, block);
+			this.ensureBlockHostMounted();
+		} else {
+			this.pushBlock(block);
+		}
+
 		this.dependencies.ui.requestRender();
 	}
 
@@ -501,6 +526,11 @@ export class Timeline {
     this.dependencies.state.shell.setToolsExpanded(expanded);
     if (isExpandable(this.startupContent)) {
       this.startupContent.setExpanded(expanded);
+    }
+    for (const block of this.blocks) {
+      if (isExpandable(block)) {
+        block.setExpanded(expanded);
+      }
     }
     for (const child of this.dependencies.chatContainer.children) {
       if (isExpandable(child)) {

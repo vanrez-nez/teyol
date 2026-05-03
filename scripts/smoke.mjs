@@ -35,7 +35,8 @@ import {
 	getUserMessageText,
 } from "../dist/shell/tui/display-helpers.js";
 import { Timeline } from "../dist/shell/tui/timeline.js";
-import { TimelineBlock, UserMessageBlock } from "../dist/shell/tui/components/index.js";
+import { LoadedResourcesBlock, TimelineBlock, UserMessageBlock } from "../dist/shell/tui/components/index.js";
+import { showLoadedResources } from "../dist/shell/tui/extensions/loaded-resources.js";
 import { buildHotkeyHelpMarkdown } from "../dist/shell/tui/hotkeys/help.js";
 import { Container, visibleWidth } from "../dist/tui/index.js";
 
@@ -687,6 +688,141 @@ function testTimelineStartupBlocks() {
 	assert.deepEqual(timeline.render(80), []);
 }
 
+function testLoadedResourcesBlock() {
+	initTheme("dark", false);
+	const block = new LoadedResourcesBlock({
+		id: "resources-1",
+		expanded: false,
+		sections: [
+			{
+				title: "Skills",
+				collapsedBody: "  compact",
+				expandedBody: "  expanded/path/skill.md",
+			},
+		],
+	});
+
+	assert.match(block.render(80).join("\n"), /compact/);
+	assert.doesNotMatch(block.render(80).join("\n"), /expanded\/path/);
+	block.setExpanded(true);
+	assert.match(block.render(80).join("\n"), /expanded\/path/);
+	assert.deepEqual(block.serialize(), {
+		type: "loaded-resources",
+		id: "resources-1",
+		state: {
+			expanded: true,
+			sections: [
+				{
+					title: "Skills",
+					collapsedBody: "  compact",
+					expandedBody: "  expanded/path/skill.md",
+				},
+			],
+		},
+	});
+}
+
+function createLoadedResourcesFixture(overrides = {}) {
+	const resourceLoader = {
+		getAgentsFiles: () => ({ agentsFiles: overrides.agentsFiles ?? [] }),
+		getSkills: () => ({
+			skills:
+				overrides.skills ?? [
+					{
+						name: "alpha",
+						filePath: join(repoRoot, ".agents/skills/alpha/SKILL.md"),
+					},
+				],
+			diagnostics: overrides.skillDiagnostics ?? [],
+		}),
+		getPrompts: () => ({ prompts: overrides.prompts ?? [], diagnostics: overrides.promptDiagnostics ?? [] }),
+		getThemes: () => ({ themes: overrides.themes ?? [], diagnostics: overrides.themeDiagnostics ?? [] }),
+		getExtensions: () => ({
+			extensions: overrides.extensions ?? [],
+			errors: overrides.extensionErrors ?? [],
+		}),
+	};
+	const extensionRunner = {
+		getCommandDiagnostics: () => overrides.commandDiagnostics ?? [],
+		getRegisteredCommands: () => overrides.registeredCommands ?? [],
+		getShortcutDiagnostics: () => overrides.shortcutDiagnostics ?? [],
+	};
+	return { resourceLoader, extensionRunner };
+}
+
+function testShowLoadedResourcesBuildsBlock() {
+	initTheme("dark", false);
+	const { resourceLoader, extensionRunner } = createLoadedResourcesFixture();
+	const block = showLoadedResources({
+		resourceLoader,
+		extensionRunner,
+		commands: [],
+		promptTemplates: [],
+		cwd: repoRoot,
+		verbose: false,
+		quietStartup: false,
+		getStartupExpansionState: () => false,
+	});
+
+	assert.ok(block);
+	const rendered = block.render(100).join("\n");
+	assert.match(rendered, /Skills/);
+	assert.match(rendered, /alpha/);
+}
+
+function testShowLoadedResourcesDiagnosticsWhenQuiet() {
+	initTheme("dark", false);
+	const { resourceLoader, extensionRunner } = createLoadedResourcesFixture({
+		skills: [],
+		skillDiagnostics: [{ type: "warning", message: "duplicate skill" }],
+	});
+	const block = showLoadedResources({
+		resourceLoader,
+		extensionRunner,
+		commands: [],
+		promptTemplates: [],
+		cwd: repoRoot,
+		verbose: false,
+		quietStartup: true,
+		getStartupExpansionState: () => false,
+		showDiagnosticsWhenQuiet: true,
+	});
+
+	assert.ok(block);
+	assert.match(block.render(100).join("\n"), /Skill conflicts/);
+	assert.match(block.render(100).join("\n"), /duplicate skill/);
+}
+
+function testTimelineLoadedResourcesPlacement() {
+	initTheme("dark", false);
+	const { timeline } = createTimelineForTest();
+	timeline.renderStartupContent({
+		versionLine: "version 1",
+		expandedInstructions: "expanded",
+		compactInstructions: "startup compact",
+		compactOnboarding: "compact onboarding",
+		onboarding: "onboarding",
+		expanded: false,
+	});
+	timeline.setLoadedResourcesBlock(
+		new LoadedResourcesBlock({
+			expanded: false,
+			sections: [{ title: "Skills", collapsedBody: "  one", expandedBody: "  one expanded" }],
+		}),
+	);
+	timeline.setLoadedResourcesBlock(
+		new LoadedResourcesBlock({
+			expanded: false,
+			sections: [{ title: "Skills", collapsedBody: "  two", expandedBody: "  two expanded" }],
+		}),
+	);
+
+	const rendered = timeline.render(100).join("\n");
+	assert.ok(rendered.indexOf("startup compact") < rendered.indexOf("Skills"));
+	assert.match(rendered, /two/);
+	assert.doesNotMatch(rendered, /one/);
+}
+
 function testUserMessageBlock() {
 	initTheme("dark", false);
 	const block = new UserMessageBlock({ id: "user-1", text: "hello **world**" });
@@ -887,6 +1023,10 @@ testUiDescriptorContracts();
 testTimelineBlockBaseContract();
 testTimelineBlockRendering();
 testTimelineStartupBlocks();
+testLoadedResourcesBlock();
+testShowLoadedResourcesBuildsBlock();
+testShowLoadedResourcesDiagnosticsWhenQuiet();
+testTimelineLoadedResourcesPlacement();
 testUserMessageBlock();
 testTimelineUserMessageBlocks();
 testTimelineSkillBlockTrailingUserMessage();

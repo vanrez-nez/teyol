@@ -705,8 +705,7 @@ export class InteractiveMode {
     force?: boolean;
     showDiagnosticsWhenQuiet?: boolean;
   }): void {
-    showLoadedResources({
-      chatContainer: this.chatContainer,
+    const block = showLoadedResources({
       resourceLoader: this.runtimeHost.session.resourceLoader,
       extensionRunner: this.runtimeHost.session.extensionRunner,
       commands: this.getBuiltInCommands(),
@@ -719,6 +718,7 @@ export class InteractiveMode {
       force: options?.force,
       showDiagnosticsWhenQuiet: options?.showDiagnosticsWhenQuiet,
     });
+    this.timeline.setLoadedResourcesBlock(block);
   }
 
   /**
