@@ -34,9 +34,10 @@ import {
 	getShortPath,
 	getUserMessageText,
 } from "../dist/shell/tui/display-helpers.js";
+import { Timeline } from "../dist/shell/tui/timeline.js";
 import { TimelineBlock } from "../dist/shell/tui/components/index.js";
 import { buildHotkeyHelpMarkdown } from "../dist/shell/tui/hotkeys/help.js";
-import { visibleWidth } from "../dist/tui/index.js";
+import { Container, visibleWidth } from "../dist/tui/index.js";
 
 const repoRoot = process.cwd();
 const cliRoot = mkdtempSync(join(tmpdir(), "teyol-cli-"));
@@ -523,6 +524,35 @@ function staticComponent(lines) {
 	};
 }
 
+function createTimelineForTest(options = {}) {
+	const chatContainer = new Container();
+	const timeline = new Timeline(
+		{
+			ui: {
+				requestRender() {},
+			},
+			chatContainer,
+			pendingMessagesContainer: new Container(),
+			statusContainer: new Container(),
+			state: createCliState({
+				hideThinkingBlock: false,
+				hiddenThinkingLabel: "thinking",
+				autoCompactEnabled: false,
+			}),
+			footer: {
+				invalidate() {},
+			},
+			getSession: () => undefined,
+			getEditor: () => undefined,
+			getMarkdownTheme: () => undefined,
+			getRegisteredToolDefinition: () => undefined,
+			updateEditorBorderColor() {},
+		},
+		options,
+	);
+	return { timeline, chatContainer };
+}
+
 function createShellLayoutForTest(options = {}) {
 	const session = {
 		state: { model: undefined },
@@ -606,6 +636,52 @@ function testTimelineBlockBaseContract() {
 	const [backgroundLine] = background.render(5);
 	assert.ok(backgroundLine.includes(theme.getBgAnsi("userMessageBg")));
 	assert.equal(visibleWidth(backgroundLine), 5);
+}
+
+function testTimelineBlockRendering() {
+	class TestTimelineBlock extends TimelineBlock {
+		constructor(id, text) {
+			super("test-block", { id });
+			this.addChild(staticComponent([text]));
+		}
+
+		serialize() {
+			return {
+				type: "test-block",
+				id: this.id,
+			};
+		}
+	}
+
+	const { timeline } = createTimelineForTest({ maxVisibleBlocks: 2 });
+	timeline.pushBlock(new TestTimelineBlock("one", "one"));
+	timeline.pushBlock(new TestTimelineBlock("two", "two"));
+	timeline.pushBlock(new TestTimelineBlock("three", "three"));
+	assert.deepEqual(timeline.render(8), ["two     ", "three   "]);
+}
+
+function testTimelineStartupBlocks() {
+	initTheme("dark", false);
+	const { timeline, chatContainer } = createTimelineForTest();
+	timeline.renderStartupContent({
+		versionLine: "version 1",
+		expandedInstructions: "expanded",
+		compactInstructions: "compact",
+		compactOnboarding: "compact onboarding",
+		onboarding: "onboarding",
+		expanded: false,
+	});
+
+	assert.equal(chatContainer.children.length, 1);
+	assert.ok(timeline.getStartupContent());
+	const startupLines = timeline.render(80).join("\n");
+	assert.match(startupLines, /version 1/);
+	assert.match(startupLines, /compact/);
+	assert.match(startupLines, /onboarding/);
+
+	timeline.renderStartupContent(undefined);
+	assert.equal(timeline.getStartupContent(), undefined);
+	assert.deepEqual(timeline.render(80), []);
 }
 
 function testShellLayoutNarrowWidth() {
@@ -761,6 +837,8 @@ testCliHelp();
 testUnknownFlagDiagnostics();
 testUiDescriptorContracts();
 testTimelineBlockBaseContract();
+testTimelineBlockRendering();
+testTimelineStartupBlocks();
 testShellLayoutNarrowWidth();
 testShellLayoutWideWidth();
 testShellLayoutUsesTallerSide();

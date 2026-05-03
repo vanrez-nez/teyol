@@ -14,6 +14,7 @@ import { CustomMessageComponent } from "./components/custom-message.js";
 import { DynamicBorder } from "./components/dynamic-border.js";
 import { formatAppKeyDisplay } from "./display-helpers.js";
 import { keyText } from "./components/keybinding-hints.js";
+import type { TimelineBlock } from "./components/timeline/base-block.js";
 import { LogoBlock } from "./components/timeline/logo-block.js";
 import { StartupBlock } from "./components/timeline/startup-block.js";
 import { SkillInvocationMessageComponent } from "./components/skill-invocation-message.js";
@@ -46,52 +47,95 @@ export interface TimelineDependencies {
 }
 
 export interface StartupContentOptions {
-  versionLine: string;
+	versionLine: string;
   expandedInstructions: string;
   compactInstructions: string;
   compactOnboarding: string;
   onboarding: string;
-  expanded: boolean;
+	expanded: boolean;
+}
+
+export interface TimelineOptions {
+	maxVisibleBlocks?: number;
 }
 
 export class Timeline {
-  private streamingComponent: AssistantMessageComponent | undefined = undefined;
-  private streamingMessage: AssistantMessage | undefined = undefined;
-  private pendingTools = new Map<string, ToolExecutionComponent>();
-  private lastStatusSpacer: Spacer | undefined = undefined;
-  private lastStatusText: Text | undefined = undefined;
-  private startupContent: Component | undefined = undefined;
+	maxVisibleBlocks: number;
+	private blocks: TimelineBlock[] = [];
+	private streamingComponent: AssistantMessageComponent | undefined = undefined;
+	private streamingMessage: AssistantMessage | undefined = undefined;
+	private pendingTools = new Map<string, ToolExecutionComponent>();
+	private lastStatusSpacer: Spacer | undefined = undefined;
+	private lastStatusText: Text | undefined = undefined;
+	private startupContent: Component | undefined = undefined;
+	private readonly blockHost: Component = {
+		invalidate: () => {},
+		render: (width) => this.render(width),
+	};
 
-  constructor(private readonly dependencies: TimelineDependencies) {}
+	constructor(
+		private readonly dependencies: TimelineDependencies,
+		options: TimelineOptions = {},
+	) {
+		this.maxVisibleBlocks = options.maxVisibleBlocks ?? Number.POSITIVE_INFINITY;
+	}
 
-  getStartupContent(): Component | undefined {
-    return this.startupContent;
-  }
+	getStartupContent(): Component | undefined {
+		return this.startupContent;
+	}
 
-  renderStartupContent(options: StartupContentOptions | undefined): void {
-    if (!options) {
-      this.startupContent = undefined;
-      return;
-    }
+	pushBlock(block: TimelineBlock): void {
+		this.blocks.push(block);
+		this.ensureBlockHostMounted();
+	}
 
-    this.startupContent = new StartupBlock({
-      expandedInstructions: options.expandedInstructions,
-      compactInstructions: options.compactInstructions,
-      compactOnboarding: options.compactOnboarding,
-      onboarding: options.onboarding,
-      expanded: options.expanded,
-      padding: { left: 1 },
-    });
+	clearBlocks(): void {
+		this.blocks = [];
+	}
 
-    this.dependencies.chatContainer.addChild(new Spacer(1));
-    this.dependencies.chatContainer.addChild(new LogoBlock({ versionLine: options.versionLine, padding: { bottom: 1 } }));
-    this.dependencies.chatContainer.addChild(this.startupContent);
-    this.dependencies.chatContainer.addChild(new Spacer(1));
-  }
+	render(width: number): string[] {
+		const maxVisibleBlocks = Number.isFinite(this.maxVisibleBlocks)
+			? Math.max(0, Math.floor(this.maxVisibleBlocks))
+			: Number.POSITIVE_INFINITY;
+		const blocks = Number.isFinite(maxVisibleBlocks) ? this.blocks.slice(-maxVisibleBlocks) : this.blocks;
+		const lines: string[] = [];
 
-  clear(): void {
-    this.dependencies.chatContainer.clear();
-    this.dependencies.pendingMessagesContainer.clear();
+		for (const block of blocks) {
+			lines.push(...block.render(width));
+		}
+
+		return lines;
+	}
+
+	renderStartupContent(options: StartupContentOptions | undefined): void {
+		this.clearBlocks();
+		if (!options) {
+			this.startupContent = undefined;
+			this.dependencies.ui.requestRender();
+			return;
+		}
+
+		const startupBlock = new StartupBlock({
+			expandedInstructions: options.expandedInstructions,
+			compactInstructions: options.compactInstructions,
+			compactOnboarding: options.compactOnboarding,
+			onboarding: options.onboarding,
+			expanded: options.expanded,
+			padding: { left: 1 },
+			margin: { bottom: 1 },
+		});
+		this.startupContent = startupBlock;
+
+		this.pushBlock(new LogoBlock({ versionLine: options.versionLine, margin: { top: 1 }, padding: { bottom: 1 } }));
+		this.pushBlock(startupBlock);
+		this.dependencies.ui.requestRender();
+	}
+
+	clear(): void {
+		this.dependencies.chatContainer.clear();
+		this.clearBlocks();
+		this.startupContent = undefined;
+		this.dependencies.pendingMessagesContainer.clear();
     this.streamingComponent = undefined;
     this.streamingMessage = undefined;
     this.pendingTools.clear();
@@ -480,7 +524,7 @@ export class Timeline {
     }
   }
 
-  private createToolComponent(toolName: string, toolCallId: string, args: unknown): ToolExecutionComponent {
+	private createToolComponent(toolName: string, toolCallId: string, args: unknown): ToolExecutionComponent {
     const session = this.dependencies.getSession();
     const component = new ToolExecutionComponent(
       toolName,
@@ -496,5 +540,11 @@ export class Timeline {
     );
     component.setExpanded(this.dependencies.state.shell.$toolOutputExpanded.getState());
     return component;
-  }
+	}
+
+	private ensureBlockHostMounted(): void {
+		if (!this.dependencies.chatContainer.children.includes(this.blockHost)) {
+			this.dependencies.chatContainer.addChild(this.blockHost);
+		}
+	}
 }
