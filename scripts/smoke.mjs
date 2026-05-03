@@ -559,11 +559,15 @@ function createShellLayoutRenderFixture(timelineLines, sidebarLines) {
 function testTimelineBlockBaseContract() {
 	class TestTimelineBlock extends TimelineBlock {
 		constructor() {
-			super("test-block", { id: "block-1" });
+			super("test-block", "block-1");
 		}
 
-		serializeState() {
-			return { text: "hello" };
+		serialize() {
+			return {
+				type: "test-block",
+				id: this.id,
+				state: { text: "hello" },
+			};
 		}
 	}
 

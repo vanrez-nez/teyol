@@ -15,6 +15,7 @@ import { DynamicBorder } from "./components/dynamic-border.js";
 import { formatAppKeyDisplay } from "./display-helpers.js";
 import { keyText } from "./components/keybinding-hints.js";
 import { LogoBlock } from "./components/timeline/logo-block.js";
+import { StartupBlock } from "./components/timeline/startup-block.js";
 import { SkillInvocationMessageComponent } from "./components/skill-invocation-message.js";
 import { ToolExecutionComponent } from "./components/tool-execution.js";
 import { UserMessageComponent } from "./components/user-message.js";
@@ -28,22 +29,6 @@ interface Expandable {
 
 function isExpandable(obj: unknown): obj is Expandable {
   return typeof obj === "object" && obj !== null && "setExpanded" in obj && typeof obj.setExpanded === "function";
-}
-
-class ExpandableText extends Text implements Expandable {
-  constructor(
-    private readonly getCollapsedText: () => string,
-    private readonly getExpandedText: () => string,
-    expanded = false,
-    paddingX = 0,
-    paddingY = 0,
-  ) {
-    super(expanded ? getExpandedText() : getCollapsedText(), paddingX, paddingY);
-  }
-
-  setExpanded(expanded: boolean): void {
-    this.setText(expanded ? this.getExpandedText() : this.getCollapsedText());
-  }
 }
 
 export interface TimelineDependencies {
@@ -89,13 +74,15 @@ export class Timeline {
       return;
     }
 
-    this.startupContent = new ExpandableText(
-      () => `${options.compactInstructions}\n${options.compactOnboarding}\n\n${options.onboarding}`,
-      () => `${options.expandedInstructions}\n\n${options.onboarding}`,
-      options.expanded,
-      1,
-      0,
-    );
+    this.startupContent = new StartupBlock({
+      expandedInstructions: options.expandedInstructions,
+      compactInstructions: options.compactInstructions,
+      compactOnboarding: options.compactOnboarding,
+      onboarding: options.onboarding,
+      expanded: options.expanded,
+      paddingX: 1,
+      paddingY: 0,
+    });
 
     this.dependencies.chatContainer.addChild(new Spacer(1));
     this.dependencies.chatContainer.addChild(new LogoBlock({ versionLine: options.versionLine, paddingTop: 0, paddingBottom: 1 }));

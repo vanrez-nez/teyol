@@ -3,7 +3,7 @@ import { join } from "node:path";
 import { visibleWidth } from "#tui/index.js";
 import { getPackageDir } from "../../../../config.js";
 import { theme } from "../../../theme/theme.js";
-import { TimelineBlock, type TimelineBlockOptions } from "./base-block.js";
+import { TimelineBlock } from "./base-block.js";
 
 export interface LogoBlockState {
 	logo?: string;
@@ -12,7 +12,14 @@ export interface LogoBlockState {
 	paddingBottom: number;
 }
 
-export interface LogoBlockOptions extends TimelineBlockOptions {
+export interface SerializedLogoBlock {
+	type: "logo";
+	id: string;
+	state: LogoBlockState;
+}
+
+export interface LogoBlockOptions {
+	id?: string;
 	logo?: string;
 	versionLine: string;
 	paddingTop?: number;
@@ -44,14 +51,14 @@ function withHorizontalPadding(text: string, width: number): string {
 		.join("\n");
 }
 
-export class LogoBlock extends TimelineBlock<LogoBlockState> {
+export class LogoBlock extends TimelineBlock {
 	private readonly logo: string | undefined;
 	private readonly versionLine: string;
 	private readonly paddingTop: number;
 	private readonly paddingBottom: number;
 
 	constructor(options: LogoBlockOptions) {
-		super("logo", options);
+		super("logo", options.id);
 		this.logo = options.logo ?? loadAsciiLogo();
 		this.versionLine = options.versionLine;
 		this.paddingTop = options.paddingTop ?? 0;
@@ -69,12 +76,16 @@ export class LogoBlock extends TimelineBlock<LogoBlockState> {
 		return withVerticalPadding(`${centeredLogo}\n${centeredVersion}`, this.paddingTop, this.paddingBottom).split("\n");
 	}
 
-	protected serializeState(): LogoBlockState {
+	serialize(): SerializedLogoBlock {
 		return {
-			logo: this.logo,
-			versionLine: this.versionLine,
-			paddingTop: this.paddingTop,
-			paddingBottom: this.paddingBottom,
+			type: "logo",
+			id: this.id,
+			state: {
+				logo: this.logo,
+				versionLine: this.versionLine,
+				paddingTop: this.paddingTop,
+				paddingBottom: this.paddingBottom,
+			},
 		};
 	}
 }
