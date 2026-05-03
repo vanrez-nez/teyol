@@ -1,7 +1,7 @@
 import type { Transport } from "#ai/index.js";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "fs";
-import { homedir } from "os";
-import { dirname, join } from "path";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { dirname, join } from "node:path";
 import lockfile from "proper-lockfile";
 import { CONFIG_DIR_NAME, getAgentDir } from "../../config.js";
 import { LOG_LEVELS, type LogLevel, type LogMode } from "./logger.js";
@@ -80,7 +80,6 @@ export type PackageSource =
 	  };
 
 export interface Settings {
-	lastChangelogVersion?: string;
 	defaultProvider?: string;
 	defaultModel?: string;
 	defaultThinkingLevel?: "off" | "minimal" | "low" | "medium" | "high" | "xhigh";
@@ -96,8 +95,7 @@ export interface Settings {
 	quietStartup?: boolean;
 	shellCommandPrefix?: string; // Prefix prepended to every bash command (e.g., "shopt -s expand_aliases" for alias support)
 	npmCommand?: string[]; // Command used for npm package lookup/install operations, argv-style (e.g., ["mise", "exec", "node@20", "--", "npm"])
-	collapseChangelog?: boolean; // Show condensed changelog after update
-	enableInstallTelemetry?: boolean; // default: true - anonymous version/update ping after changelog-detected updates
+	enableInstallTelemetry?: boolean; // default: true - enable anonymous attribution headers where supported
 	packages?: PackageSource[]; // Array of npm/git package sources (string or object with filtering)
 	extensions?: string[]; // Array of local extension file paths or directories
 	skills?: string[]; // Array of local skill file paths or directories
@@ -570,16 +568,6 @@ export class SettingsManager {
 		return drained;
 	}
 
-	getLastChangelogVersion(): string | undefined {
-		return this.settings.lastChangelogVersion;
-	}
-
-	setLastChangelogVersion(version: string): void {
-		this.globalSettings.lastChangelogVersion = version;
-		this.markModified("lastChangelogVersion");
-		this.save();
-	}
-
 	getSessionDir(): string | undefined {
 		const sessionDir = this.settings.sessionDir;
 		if (!sessionDir) {
@@ -796,16 +784,6 @@ export class SettingsManager {
 	setNpmCommand(command: string[] | undefined): void {
 		this.globalSettings.npmCommand = command ? [...command] : undefined;
 		this.markModified("npmCommand");
-		this.save();
-	}
-
-	getCollapseChangelog(): boolean {
-		return this.settings.collapseChangelog ?? false;
-	}
-
-	setCollapseChangelog(collapse: boolean): void {
-		this.globalSettings.collapseChangelog = collapse;
-		this.markModified("collapseChangelog");
 		this.save();
 	}
 

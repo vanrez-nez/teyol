@@ -128,8 +128,6 @@ export class InteractiveMode {
   private readonly defaultHiddenThinkingLabel = "Thinking...";
 
   private lastSigintTime = 0;
-  private changelogMarkdown: string | undefined = undefined;
-  private startupNoticesShown = false;
 
   // Agent subscription unsubscribe function
   private unsubscribe?: () => void;
@@ -253,7 +251,6 @@ export class InteractiveMode {
       getEditorText: () => this.editor.getExpandedText?.() ?? this.editor.getText(),
       bindCommandContextActions: () => this.createExtensionCommandContextActions(),
       showLoadedResources: () => this.showLoadedResources({ force: false, showDiagnosticsWhenQuiet: true }),
-      showStartupNoticesIfNeeded: () => this.showStartupNoticesIfNeeded(),
     });
     this.runtimeHost.setBeforeSessionInvalidate(() => {
       this.interactiveExtensions.reset();
@@ -437,15 +434,6 @@ export class InteractiveMode {
     };
   }
 
-  private showStartupNoticesIfNeeded(): void {
-    if (this.startupNoticesShown) {
-      return;
-    }
-    this.startupNoticesShown = true;
-
-    this.timeline.showStartupNotice(this.changelogMarkdown, this.version);
-  }
-
   async init(): Promise<void> {
     if (this.isInitialized) return;
 
@@ -453,9 +441,6 @@ export class InteractiveMode {
     getLogger().info("startup", { version: this.version, cwd: this.runtimeHost.session.sessionManager.getCwd() });
 
     this.registerSignalHandlers();
-
-    // Load changelog (only show new entries, skip for resumed sessions)
-    this.changelogMarkdown = undefined;
 
     // Ensure fd and rg are available (downloads if missing, adds to PATH via getBinDir)
     // Both are needed: fd for autocomplete, rg for grep tool and bash commands

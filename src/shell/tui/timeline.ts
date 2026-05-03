@@ -5,7 +5,7 @@ import { parseSkillBlock } from "#shell/runtime/agent-session.js";
 import type { SessionContext } from "#shell/runtime/session-manager.js";
 import type { ToolDefinition } from "#shell/runtime/extensions/types.js";
 import type { Component, Container, EditorComponent, MarkdownTheme, TUI } from "#tui/index.js";
-import { Markdown, Spacer, Text, TruncatedText } from "#tui/index.js";
+import { Spacer, Text, TruncatedText } from "#tui/index.js";
 import { APP_NAME } from "../../config.js";
 import { theme } from "../theme/theme.js";
 import { AssistantMessageComponent } from "./components/assistant-message.js";
@@ -103,29 +103,6 @@ export class Timeline {
     this.dependencies.chatContainer.addChild(new Spacer(1));
   }
 
-  showStartupNotice(changelogMarkdown: string | undefined, version: string): void {
-    if (!changelogMarkdown) {
-      return;
-    }
-
-    const { chatContainer } = this.dependencies;
-    if (chatContainer.children.length > 0) {
-      chatContainer.addChild(new Spacer(1));
-    }
-    chatContainer.addChild(new DynamicBorder());
-    if (this.dependencies.getSession().settingsManager.getCollapseChangelog()) {
-      const versionMatch = changelogMarkdown.match(/##\s+\[?(\d+\.\d+\.\d+)\]?/);
-      const latestVersion = versionMatch ? versionMatch[1] : version;
-      chatContainer.addChild(new Text(`Updated to v${latestVersion}.`, 1, 0));
-    } else {
-      chatContainer.addChild(new Text(theme.bold(theme.fg("accent", "What's New")), 1, 0));
-      chatContainer.addChild(new Spacer(1));
-      chatContainer.addChild(new Markdown(changelogMarkdown.trim(), 1, 0, this.dependencies.getMarkdownTheme()));
-      chatContainer.addChild(new Spacer(1));
-    }
-    chatContainer.addChild(new DynamicBorder());
-  }
-
   clear(): void {
     this.dependencies.chatContainer.clear();
     this.dependencies.pendingMessagesContainer.clear();
@@ -186,13 +163,11 @@ export class Timeline {
   showNewVersionNotification(newVersion: string): void {
     const action = theme.fg("accent", `${APP_NAME} update`);
     const updateInstruction = theme.fg("muted", `New version ${newVersion} is available. Run `) + action;
-    const changelogUrl = theme.fg("accent", "");
-    const changelogLine = theme.fg("muted", "Changelog: ") + changelogUrl;
 
     this.dependencies.chatContainer.addChild(new Spacer(1));
     this.dependencies.chatContainer.addChild(new DynamicBorder((text) => theme.fg("warning", text)));
     this.dependencies.chatContainer.addChild(
-      new Text(`${theme.bold(theme.fg("warning", "Update Available"))}\n${updateInstruction}\n${changelogLine}`, 1, 0),
+      new Text(`${theme.bold(theme.fg("warning", "Update Available"))}\n${updateInstruction}`, 1, 0),
     );
     this.dependencies.chatContainer.addChild(new DynamicBorder((text) => theme.fg("warning", text)));
     this.dependencies.ui.requestRender();

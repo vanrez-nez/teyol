@@ -60,7 +60,6 @@ export interface InteractiveExtensionsOptions {
 	getEditorText(): string;
 	bindCommandContextActions(): Parameters<AgentSession["bindExtensions"]>[0]["commandContextActions"];
 	showLoadedResources(): void;
-	showStartupNoticesIfNeeded(): void;
 }
 
 export class InteractiveExtensions {
@@ -105,7 +104,6 @@ export class InteractiveExtensions {
 		this.options.setupAutocompleteProvider();
 		this.setupShortcuts(session.extensionRunner);
 		this.options.showLoadedResources();
-		this.options.showStartupNoticesIfNeeded();
 	}
 
 	setupShortcuts(extensionRunner: ExtensionRunner): void {

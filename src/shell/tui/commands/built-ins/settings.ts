@@ -56,7 +56,6 @@ export const settingsCommand: TuiCommand<{
 				currentTheme: session.settingsManager.getTheme() || "dark",
 				availableThemes: getAvailableThemes(),
 				hideThinkingBlock: state.shell.$hideThinkingBlock.getState(),
-				collapseChangelog: session.settingsManager.getCollapseChangelog(),
 				enableInstallTelemetry: session.settingsManager.getEnableInstallTelemetry(),
 				doubleEscapeAction: session.settingsManager.getDoubleEscapeAction(),
 				treeFilterMode: session.settingsManager.getTreeFilterMode(),
@@ -144,9 +143,6 @@ export const settingsCommand: TuiCommand<{
 					}
 					chatContainer.clear();
 					rebuildChatFromMessages();
-				},
-				onCollapseChangelogChange: (collapsed) => {
-					session.settingsManager.setCollapseChangelog(collapsed);
 				},
 				onEnableInstallTelemetryChange: (enabled) => {
 					session.settingsManager.setEnableInstallTelemetry(enabled);
