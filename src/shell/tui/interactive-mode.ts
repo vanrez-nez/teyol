@@ -81,7 +81,7 @@ import { type RegisteredCommand, registerCommand } from "./commands/types.js";
 import { InteractiveExtensions } from "./extensions/interactive-extensions.js";
 import { showLoadedResources } from "./extensions/loaded-resources.js";
 import { setupBuiltInHotkeys } from "./hotkeys/built-in.js";
-import { ShellComposition } from "./layout/composition.js";
+import { ShellLayoutComponent } from "./layout.js";
 import { Timeline } from "./timeline.js";
 
 /**
@@ -105,7 +105,7 @@ export interface InteractiveModeOptions {
 export class InteractiveMode {
   private runtimeHost: AgentSessionRuntime;
   private state: CliState;
-  private composition: ShellComposition;
+  private layout: ShellLayoutComponent;
   private timeline: Timeline;
   private ui: TUI;
   private chatContainer: Container;
@@ -116,8 +116,8 @@ export class InteractiveMode {
   private autocompleteProvider: AutocompleteProvider | undefined;
   private interactiveExtensions: InteractiveExtensions;
   private fdPath: string | undefined;
-  private footer: ShellComposition["footer"];
-  private footerDataProvider: ShellComposition["footerDataProvider"];
+  private footer: ShellLayoutComponent["footer"];
+  private footerDataProvider: ShellLayoutComponent["footerDataProvider"];
   // Stored so the same manager can be injected into custom editors, selectors, and extension UI.
   private keybindings: KeybindingsManager;
   private version: string;
@@ -177,20 +177,20 @@ export class InteractiveMode {
       await this.rebindCurrentSession();
     });
     this.version = VERSION;
-    this.composition = new ShellComposition({
+    this.layout = new ShellLayoutComponent({
       session: this.runtimeHost.session,
       cwd: this.runtimeHost.session.sessionManager.getCwd(),
       showHardwareCursor: this.runtimeHost.session.settingsManager.getShowHardwareCursor(),
       clearOnShrink: this.runtimeHost.session.settingsManager.getClearOnShrink(),
     });
-    this.ui = this.composition.ui;
-    this.chatContainer = this.composition.chat;
-    this.pendingMessagesContainer = this.composition.pendingMessages;
-    this.statusContainer = this.composition.status;
-    this.widgetContainerAbove = this.composition.widgetsAbove;
-    this.widgetContainerBelow = this.composition.widgetsBelow;
-    this.footerDataProvider = this.composition.footerDataProvider;
-    this.footer = this.composition.footer;
+    this.ui = this.layout.ui;
+    this.chatContainer = this.layout.chat;
+    this.pendingMessagesContainer = this.layout.pendingMessages;
+    this.statusContainer = this.layout.status;
+    this.widgetContainerAbove = this.layout.widgetsAbove;
+    this.widgetContainerBelow = this.layout.widgetsBelow;
+    this.footerDataProvider = this.layout.footerDataProvider;
+    this.footer = this.layout.footer;
     this.keybindings = KeybindingsManager.create();
     setKeybindings(this.keybindings);
     const editorPaddingX = this.runtimeHost.session.settingsManager.getEditorPaddingX();
@@ -200,7 +200,7 @@ export class InteractiveMode {
       autocompleteMaxVisible,
     });
     this.editor = this.defaultEditor;
-    this.composition.restoreEditorHost(this.editor as Component);
+    this.layout.restoreEditorHost(this.editor as Component);
     this.timeline = new Timeline({
       ui: this.ui,
       chatContainer: this.chatContainer,
@@ -218,7 +218,7 @@ export class InteractiveMode {
     this.state.footer.setAutoCompactEnabled(this.runtimeHost.session.autoCompactionEnabled);
     this.interactiveExtensions = new InteractiveExtensions({
       ui: this.ui,
-      composition: this.composition,
+      layout: this.layout,
       state: this.state,
       chatContainer: this.chatContainer,
       widgetContainerAbove: this.widgetContainerAbove,
@@ -292,7 +292,7 @@ export class InteractiveMode {
         session: this.runtimeHost.session,
         state: this.state,
         ui: this.ui,
-        composition: this.composition,
+        layout: this.layout,
         chatContainer: this.chatContainer,
         footer: this.footer,
         defaultEditor: this.defaultEditor,
@@ -322,7 +322,7 @@ export class InteractiveMode {
       registerCommand(loginCommand, {
         session: this.runtimeHost.session,
         ui: this.ui,
-        composition: this.composition,
+        layout: this.layout,
         footer: this.footer,
         footerDataProvider: this.footerDataProvider,
         state: this.state,
@@ -333,7 +333,7 @@ export class InteractiveMode {
       registerCommand(logoutCommand, {
         session: this.runtimeHost.session,
         ui: this.ui,
-        composition: this.composition,
+        layout: this.layout,
         footer: this.footer,
         footerDataProvider: this.footerDataProvider,
         state: this.state,
@@ -348,7 +348,7 @@ export class InteractiveMode {
         session: this.runtimeHost.session,
         chatContainer: this.chatContainer,
         ui: this.ui,
-        composition: this.composition,
+        layout: this.layout,
         getEditor: () => this.editor as Component,
       }),
       registerCommand(exitCommand, { shutdown: () => this.shutdown() }),
@@ -359,7 +359,7 @@ export class InteractiveMode {
     return {
       session: this.runtimeHost.session,
       ui: this.ui,
-      composition: this.composition,
+      layout: this.layout,
       footer: this.footer,
       footerDataProvider: this.footerDataProvider,
       state: this.state,
@@ -375,7 +375,7 @@ export class InteractiveMode {
       runtimeHost: this.runtimeHost,
       chatContainer: this.chatContainer,
       statusContainer: this.statusContainer,
-      composition: this.composition,
+      layout: this.layout,
       ui: this.ui,
       editor: this.editor,
       defaultEditor: this.defaultEditor,
@@ -397,7 +397,7 @@ export class InteractiveMode {
       session: this.runtimeHost.session,
       state: this.state,
       ui: this.ui,
-      composition: this.composition,
+      layout: this.layout,
       chatContainer: this.chatContainer,
       keybindings: this.keybindings,
       defaultEditor: this.defaultEditor,
@@ -517,7 +517,7 @@ export class InteractiveMode {
     }
 
     this.interactiveExtensions.renderWidgets(); // Initialize with default spacer
-    this.composition.attachRoot();
+    this.layout.attachRoot();
     this.ui.setFocus(this.editor);
 
     this.setupKeyHandlers();
@@ -1620,7 +1620,7 @@ export class InteractiveMode {
       this.loadingAnimation = undefined;
     }
     this.interactiveExtensions.dispose();
-    this.composition.dispose();
+    this.layout.dispose();
     this.state.dispose();
     if (this.unsubscribe) {
       this.unsubscribe();

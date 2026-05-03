@@ -3,7 +3,7 @@ import { findExactModelReferenceMatch, resolveModelScope } from "#shell/runtime/
 import type { Model } from "#ai/index.js";
 import { type AutocompleteItem, type Component, fuzzyFilter, Spacer, Text, type TUI } from "#tui/index.js";
 import { theme } from "../../../theme/theme.js";
-import type { ShellComposition } from "../../layout/composition.js";
+import type { ShellLayoutComponent } from "../../layout.js";
 import type { CliState } from "../../state/index.js";
 import { type ModelAction, ModelActionsSelectorComponent } from "../../components/model-actions-selector.js";
 import { ModelSelectorComponent } from "../../components/model-selector.js";
@@ -18,9 +18,9 @@ const modelActions: Array<{ value: ModelAction; description: string }> = [
 export interface ModelCommandDependencies {
 	session: AgentSession;
 	ui: TUI;
-	composition: ShellComposition;
-	footer: ShellComposition["footer"];
-	footerDataProvider: ShellComposition["footerDataProvider"];
+	layout: ShellLayoutComponent;
+	footer: ShellLayoutComponent["footer"];
+	footerDataProvider: ShellLayoutComponent["footerDataProvider"];
 	state: CliState;
 	chatContainer: Component & { addChild(child: Component): void };
 	getEditor(): Component;
@@ -87,8 +87,8 @@ export function getModelArgumentCompletions(
 }
 
 export function showModelSelector(dependencies: ModelCommandDependencies, initialSearchInput?: string): void {
-	const { composition, footer, session, ui, updateEditorBorderColor } = dependencies;
-	const done = () => composition.restoreEditorHost(dependencies.getEditor());
+	const { layout, footer, session, ui, updateEditorBorderColor } = dependencies;
+	const done = () => layout.restoreEditorHost(dependencies.getEditor());
 	const selector = new ModelSelectorComponent(
 		ui,
 		session.model,
@@ -113,7 +113,7 @@ export function showModelSelector(dependencies: ModelCommandDependencies, initia
 		},
 		initialSearchInput,
 	);
-	composition.setEditorHost(selector, selector);
+	layout.setEditorHost(selector, selector);
 }
 
 async function handleModelSelectCommand(
@@ -144,8 +144,8 @@ async function handleModelSelectCommand(
 }
 
 function showModelActionsSelector(dependencies: ModelCommandDependencies): void {
-	const { composition, ui } = dependencies;
-	const done = () => composition.restoreEditorHost(dependencies.getEditor());
+	const { layout, ui } = dependencies;
+	const done = () => layout.restoreEditorHost(dependencies.getEditor());
 	const selector = new ModelActionsSelectorComponent(
 		(action) => {
 			done();
@@ -163,11 +163,11 @@ function showModelActionsSelector(dependencies: ModelCommandDependencies): void 
 			ui.requestRender();
 		},
 	);
-	composition.setEditorHost(selector, selector.getSelectList());
+	layout.setEditorHost(selector, selector.getSelectList());
 }
 
 export async function showScopedModelsSelector(dependencies: ModelCommandDependencies): Promise<void> {
-	const { composition, session, ui } = dependencies;
+	const { layout, session, ui } = dependencies;
 	session.modelRegistry.refresh();
 	await session.modelRegistry.refreshDynamic();
 	const allModels = session.modelRegistry.getAvailable();
@@ -209,7 +209,7 @@ export async function showScopedModelsSelector(dependencies: ModelCommandDepende
 		ui.requestRender();
 	};
 
-	const done = () => composition.restoreEditorHost(dependencies.getEditor());
+	const done = () => layout.restoreEditorHost(dependencies.getEditor());
 	const selector = new ScopedModelsSelectorComponent(
 		{
 			allModels,
@@ -230,7 +230,7 @@ export async function showScopedModelsSelector(dependencies: ModelCommandDepende
 			},
 		},
 	);
-	composition.setEditorHost(selector, selector);
+	layout.setEditorHost(selector, selector);
 }
 
 export const modelCommand: TuiCommand<ModelCommandDependencies> = {

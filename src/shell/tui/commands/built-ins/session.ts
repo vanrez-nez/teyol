@@ -3,11 +3,11 @@ import type { AgentSessionRuntime } from "#shell/runtime/agent-session-runtime.j
 import { MissingSessionCwdError, SessionManager } from "#shell/runtime/session-manager.js";
 import type { ExtensionCommandContext } from "#shell/runtime/extensions/index.js";
 import type { KeybindingsManager } from "#shell/runtime/keybindings.js";
-import { type AutocompleteItem, type Component, type Container, type EditorComponent, Loader, Spacer, Text, type TUI } from "#tui/index.js";
+import { type AutocompleteItem, type Container, type EditorComponent, Loader, Spacer, Text, type TUI } from "#tui/index.js";
 import { theme } from "../../../theme/theme.js";
 import { SessionActionsSelectorComponent, type SessionAction } from "../../components/session-actions-selector.js";
 import { formatSessionInfo } from "../../display-helpers.js";
-import type { ShellComposition } from "../../layout/composition.js";
+import type { ShellLayoutComponent } from "../../layout.js";
 import type { TuiCommand } from "../types.js";
 import { SessionSelectorComponent } from "../../components/session-selector.js";
 import { TreeSelectorComponent } from "../../components/tree-selector.js";
@@ -30,7 +30,7 @@ export interface SessionCommandDependencies {
 	runtimeHost: AgentSessionRuntime;
 	chatContainer: Container;
 	statusContainer: Container;
-	composition: ShellComposition;
+	layout: ShellLayoutComponent;
 	ui: TUI;
 	editor: EditorComponent;
 	defaultEditor: CustomEditor;
@@ -95,8 +95,8 @@ async function handleSessionAction(dependencies: SessionCommandDependencies, act
 }
 
 function showSessionActionsSelector(dependencies: SessionCommandDependencies): void {
-	const { composition, ui } = dependencies;
-	const done = () => composition.restoreEditorHost(dependencies.editor);
+	const { layout, ui } = dependencies;
+	const done = () => layout.restoreEditorHost(dependencies.editor);
 	const selector = new SessionActionsSelectorComponent(
 		(action) => {
 			done();
@@ -107,7 +107,7 @@ function showSessionActionsSelector(dependencies: SessionCommandDependencies): v
 			ui.requestRender();
 		},
 	);
-	composition.setEditorHost(selector, selector.getSelectList());
+	layout.setEditorHost(selector, selector.getSelectList());
 }
 
 export async function startNewSession(
@@ -183,7 +183,7 @@ export function showUserMessageSelector(dependencies: SessionCommandDependencies
 	}
 
 	const initialSelectedId = userMessages[userMessages.length - 1]?.entryId;
-	const done = () => dependencies.composition.restoreEditorHost(dependencies.editor);
+	const done = () => dependencies.layout.restoreEditorHost(dependencies.editor);
 	const selector = new UserMessageSelectorComponent(
 		userMessages.map((m) => ({ id: m.entryId, text: m.text })),
 		async (entryId) => {
@@ -210,7 +210,7 @@ export function showUserMessageSelector(dependencies: SessionCommandDependencies
 		},
 		initialSelectedId,
 	);
-	dependencies.composition.setEditorHost(selector, selector.getMessageList());
+	dependencies.layout.setEditorHost(selector, selector.getMessageList());
 }
 
 export async function cloneSession(dependencies: SessionCommandDependencies): Promise<void> {
@@ -245,7 +245,7 @@ export function showTreeSelector(dependencies: SessionCommandDependencies, initi
 		return;
 	}
 
-	const done = () => dependencies.composition.restoreEditorHost(dependencies.editor);
+	const done = () => dependencies.layout.restoreEditorHost(dependencies.editor);
 	const selector = new TreeSelectorComponent(
 		tree,
 		realLeafId,
@@ -350,11 +350,11 @@ export function showTreeSelector(dependencies: SessionCommandDependencies, initi
 		initialSelectedId,
 		initialFilterMode,
 	);
-	dependencies.composition.setEditorHost(selector, selector);
+	dependencies.layout.setEditorHost(selector, selector);
 }
 
 export function showSessionSelector(dependencies: SessionCommandDependencies): void {
-	const done = () => dependencies.composition.restoreEditorHost(dependencies.editor);
+	const done = () => dependencies.layout.restoreEditorHost(dependencies.editor);
 	const selector = new SessionSelectorComponent(
 		(onProgress) =>
 			SessionManager.list(dependencies.session.sessionManager.getCwd(), dependencies.session.sessionManager.getSessionDir(), onProgress),
@@ -383,7 +383,7 @@ export function showSessionSelector(dependencies: SessionCommandDependencies): v
 		},
 		dependencies.session.sessionManager.getSessionFile(),
 	);
-	dependencies.composition.setEditorHost(selector, selector);
+	dependencies.layout.setEditorHost(selector, selector);
 }
 
 export async function resumeSession(

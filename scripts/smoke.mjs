@@ -16,10 +16,7 @@ import { validateUiDescriptorFixtures } from "../dist/shell/descriptors/ui-descr
 import {
 	ShellLayoutComponent,
 	SIDEBAR_MIN_TERMINAL_WIDTH,
-	SIDEBAR_SEPARATOR,
-	SIDEBAR_WIDTH,
-} from "../dist/shell/tui/components/shell-layout.js";
-import { ShellComposition } from "../dist/shell/tui/layout/composition.js";
+} from "../dist/shell/tui/layout.js";
 import { initTheme, theme } from "../dist/shell/theme/theme.js";
 import { createCliState } from "../dist/shell/tui/state/index.js";
 import { dispatchBuiltInCommand } from "../dist/shell/tui/commands/built-in.js";
@@ -279,12 +276,12 @@ async function testLocalOllamaCompactionWithoutApiKey() {
 	try {
 		session.sessionManager.appendMessage({
 			role: "user",
-			content: [{ type: "text", text: "Earlier session context " + "x".repeat(1200) }],
+			content: [{ type: "text", text: `Earlier session context ${"x".repeat(1200)}` }],
 			timestamp: Date.now(),
 		});
 		session.sessionManager.appendMessage({
 			role: "assistant",
-			content: [{ type: "text", text: "Earlier assistant response " + "y".repeat(1200) }],
+			content: [{ type: "text", text: `Earlier assistant response ${"y".repeat(1200)}` }],
 			api: model.api,
 			provider: model.provider,
 			model: model.id,
@@ -292,12 +289,12 @@ async function testLocalOllamaCompactionWithoutApiKey() {
 		});
 		session.sessionManager.appendMessage({
 			role: "user",
-			content: [{ type: "text", text: "Recent user message " + "z".repeat(1200) }],
+			content: [{ type: "text", text: `Recent user message ${"z".repeat(1200)}` }],
 			timestamp: Date.now(),
 		});
 		session.sessionManager.appendMessage({
 			role: "assistant",
-			content: [{ type: "text", text: "Recent assistant response " + "w".repeat(1200) }],
+			content: [{ type: "text", text: `Recent assistant response ${"w".repeat(1200)}` }],
 			api: model.api,
 			provider: model.provider,
 			model: model.id,
@@ -525,40 +522,7 @@ function staticComponent(lines) {
 	};
 }
 
-function testShellLayoutNarrowWidth() {
-	initTheme("dark", false);
-	const layout = new ShellLayoutComponent(staticComponent(["timeline"]), staticComponent(["sidebar"]));
-	assert.deepEqual(layout.render(SIDEBAR_MIN_TERMINAL_WIDTH - 1), ["timeline"]);
-}
-
-function testShellLayoutWideWidth() {
-	initTheme("dark", false);
-	const layout = new ShellLayoutComponent(staticComponent(["timeline"]), staticComponent(["sidebar"]));
-	const width = SIDEBAR_MIN_TERMINAL_WIDTH;
-	const [line] = layout.render(width);
-
-	assert.equal(visibleWidth(line), width);
-	assert.ok(line.includes(theme.getFgAnsi("sidebarBorder")));
-	assert.ok(line.includes(theme.getBgAnsi("sidebarBg")));
-	assert.ok(line.includes(`${theme.getFgAnsi("sidebarText")}sidebar`));
-	assert.equal(line.slice(0, "timeline".length), "timeline");
-}
-
-function testShellLayoutUsesTallerSide() {
-	initTheme("dark", false);
-	const layout = new ShellLayoutComponent(staticComponent(["timeline"]), staticComponent(["one", "two"]));
-	const lines = layout.render(SIDEBAR_MIN_TERMINAL_WIDTH);
-
-	assert.equal(lines.length, 2);
-	assert.equal(visibleWidth(lines[1]), SIDEBAR_MIN_TERMINAL_WIDTH);
-	assert.ok(lines[1].includes(theme.getFgAnsi("sidebarBorder")));
-	assert.ok(lines[1].includes(theme.getBgAnsi("sidebarBg")));
-	assert.ok(lines[1].includes(`${theme.getFgAnsi("sidebarText")}two`));
-}
-
-function testShellCompositionBuildsStaticRegions() {
-	const editor = staticComponent(["editor"]);
-	const replacement = staticComponent(["replacement"]);
+function createShellLayoutForTest(options = {}) {
 	const session = {
 		state: { model: undefined },
 		sessionManager: {
@@ -571,38 +535,88 @@ function testShellCompositionBuildsStaticRegions() {
 			isUsingOAuth: () => false,
 		},
 	};
-	const composition = new ShellComposition({
+	const layout = new ShellLayoutComponent({
 		session,
 		cwd: repoRoot,
 		showHardwareCursor: false,
 		clearOnShrink: false,
-		editor,
+		...options,
 	});
-	composition.ui.requestRender = () => {};
+	layout.ui.requestRender = () => {};
+	return layout;
+}
+
+function createShellLayoutRenderFixture(timelineLines, sidebarLines) {
+	const layout = createShellLayoutForTest();
+	layout.timeline.clear();
+	layout.sidebar.clear();
+	layout.timeline.addChild(staticComponent(timelineLines));
+	layout.sidebar.addChild(staticComponent(sidebarLines));
+	return layout;
+}
+
+function testShellLayoutNarrowWidth() {
+	initTheme("dark", false);
+	const layout = createShellLayoutRenderFixture(["timeline"], ["sidebar"]);
+	assert.deepEqual(layout.render(SIDEBAR_MIN_TERMINAL_WIDTH - 1), ["timeline"]);
+	layout.dispose();
+}
+
+function testShellLayoutWideWidth() {
+	initTheme("dark", false);
+	const layout = createShellLayoutRenderFixture(["timeline"], ["sidebar"]);
+	const width = SIDEBAR_MIN_TERMINAL_WIDTH;
+	const [line] = layout.render(width);
+
+	assert.equal(visibleWidth(line), width);
+	assert.ok(line.includes(theme.getFgAnsi("sidebarBorder")));
+	assert.ok(line.includes(theme.getBgAnsi("sidebarBg")));
+	assert.ok(line.includes(`${theme.getFgAnsi("sidebarText")}sidebar`));
+	assert.equal(line.slice(0, "timeline".length), "timeline");
+	layout.dispose();
+}
+
+function testShellLayoutUsesTallerSide() {
+	initTheme("dark", false);
+	const layout = createShellLayoutRenderFixture(["timeline"], ["one", "two"]);
+	const lines = layout.render(SIDEBAR_MIN_TERMINAL_WIDTH);
+
+	assert.equal(lines.length, 2);
+	assert.equal(visibleWidth(lines[1]), SIDEBAR_MIN_TERMINAL_WIDTH);
+	assert.ok(lines[1].includes(theme.getFgAnsi("sidebarBorder")));
+	assert.ok(lines[1].includes(theme.getBgAnsi("sidebarBg")));
+	assert.ok(lines[1].includes(`${theme.getFgAnsi("sidebarText")}two`));
+	layout.dispose();
+}
+
+function testShellLayoutBuildsStaticRegions() {
+	const editor = staticComponent(["editor"]);
+	const replacement = staticComponent(["replacement"]);
+	const layout = createShellLayoutForTest({ editor });
 
 	try {
-		composition.attachRoot();
-		composition.sidebar.addChild(staticComponent(["sidebar"]));
+		layout.attachRoot();
+		layout.sidebar.addChild(staticComponent(["sidebar"]));
 
-		assert.equal(composition.ui.children[0], composition.layout);
-		assert.equal(composition.ui.children[1], composition.footer);
-		assert.deepEqual(composition.timeline.children, [
-			composition.chat,
-			composition.pendingMessages,
-			composition.status,
-			composition.widgetsAbove,
-			composition.editorHost,
-			composition.widgetsBelow,
+		assert.equal(layout.ui.children[0], layout);
+		assert.equal(layout.ui.children[1], layout.footer);
+		assert.deepEqual(layout.timeline.children, [
+			layout.chat,
+			layout.pendingMessages,
+			layout.status,
+			layout.widgetsAbove,
+			layout.editorHost,
+			layout.widgetsBelow,
 		]);
-		assert.deepEqual(composition.editorHost.children, [editor]);
-		assert.deepEqual(composition.layout.render(SIDEBAR_MIN_TERMINAL_WIDTH - 1), ["editor"]);
+		assert.deepEqual(layout.editorHost.children, [editor]);
+		assert.deepEqual(layout.render(SIDEBAR_MIN_TERMINAL_WIDTH - 1), ["editor"]);
 
-		composition.setEditorHost(replacement);
-		assert.deepEqual(composition.editorHost.children, [replacement]);
-		composition.restoreEditorHost(editor);
-		assert.deepEqual(composition.editorHost.children, [editor]);
+		layout.setEditorHost(replacement);
+		assert.deepEqual(layout.editorHost.children, [replacement]);
+		layout.restoreEditorHost(editor);
+		assert.deepEqual(layout.editorHost.children, [editor]);
 	} finally {
-		composition.dispose();
+		layout.dispose();
 	}
 }
 
@@ -696,7 +710,7 @@ testUiDescriptorContracts();
 testShellLayoutNarrowWidth();
 testShellLayoutWideWidth();
 testShellLayoutUsesTallerSide();
-testShellCompositionBuildsStaticRegions();
+testShellLayoutBuildsStaticRegions();
 testCliStateQueue();
 testCliStateShellAndFooter();
 

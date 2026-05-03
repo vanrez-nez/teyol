@@ -18,12 +18,6 @@ export { type ModelsCallbacks, type ModelsConfig, ScopedModelsSelectorComponent 
 export { type SessionAction, SessionActionsSelectorComponent } from "./session-actions-selector.js";
 export { SessionSelectorComponent } from "./session-selector.js";
 export { type SettingsCallbacks, type SettingsConfig, SettingsSelectorComponent } from "./settings-selector.js";
-export {
-	ShellLayoutComponent,
-	SIDEBAR_MIN_TERMINAL_WIDTH,
-	SIDEBAR_SEPARATOR,
-	SIDEBAR_WIDTH,
-} from "./shell-layout.js";
 export { ShowImagesSelectorComponent } from "./show-images-selector.js";
 export { SkillInvocationMessageComponent } from "./skill-invocation-message.js";
 export { ThemeSelectorComponent } from "./theme-selector.js";

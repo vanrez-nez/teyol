@@ -5,7 +5,7 @@ import { getLogger } from "#shell/runtime/logger.js";
 import { setRegisteredThemes, setTheme, theme } from "../../../theme/theme.js";
 import { DynamicBorder } from "../../components/dynamic-border.js";
 import type { CustomEditor } from "../../components/custom-editor.js";
-import type { ShellComposition } from "../../layout/composition.js";
+import type { ShellLayoutComponent } from "../../layout.js";
 import type { CliState } from "../../state/index.js";
 import type { TuiCommand } from "../types.js";
 import { applyLoggerConfig } from "./log.js";
@@ -22,7 +22,7 @@ export interface ReloadDependencies {
 	session: AgentSession;
 	state: CliState;
 	ui: TUI;
-	composition: ShellComposition;
+	layout: ShellLayoutComponent;
 	chatContainer: Container;
 	keybindings: KeybindingsManager;
 	defaultEditor: CustomEditor;
@@ -42,7 +42,7 @@ export async function runReload({
 		session,
 		state,
 		ui,
-		composition,
+		layout,
 		chatContainer,
 		keybindings,
 		defaultEditor,
@@ -74,12 +74,12 @@ export async function runReload({
 		reloadBox.addChild(new DynamicBorder(borderColor));
 
 		const previousEditor = getEditor();
-		composition.setEditorHost(reloadBox);
+		layout.setEditorHost(reloadBox);
 		ui.requestRender(true);
 		await new Promise((resolve) => process.nextTick(resolve));
 
 		const dismissReloadBox = (editor: Component) => {
-			composition.restoreEditorHost(editor);
+			layout.restoreEditorHost(editor);
 		};
 
 		getLogger().info("reload.start");

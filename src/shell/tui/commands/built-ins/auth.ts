@@ -8,13 +8,13 @@ import {
 import type { AgentSession } from "#shell/runtime/agent-session.js";
 import { defaultModelPerProvider } from "#shell/runtime/model-resolver.js";
 import { BUILT_IN_PROVIDER_DISPLAY_NAMES } from "#shell/runtime/provider-display-names.js";
-import { type Component, Container, Spacer, Text, type TUI } from "#tui/index.js";
+import { type Component, type Container, Spacer, Text, type TUI } from "#tui/index.js";
 import { getAuthPath } from "../../../../config.js";
 import { theme } from "../../../theme/theme.js";
 import { ExtensionSelectorComponent } from "../../components/extension-selector.js";
 import { LoginDialogComponent } from "../../components/login-dialog.js";
 import { type AuthSelectorProvider, OAuthSelectorComponent } from "../../components/oauth-selector.js";
-import type { ShellComposition } from "../../layout/composition.js";
+import type { ShellLayoutComponent } from "../../layout.js";
 import type { CliState } from "../../state/index.js";
 import { updateAvailableProviderCount } from "./model.js";
 
@@ -23,9 +23,9 @@ const BUILT_IN_MODEL_PROVIDERS = new Set<string>(getProviders());
 export interface AuthCommandDependencies {
 	session: AgentSession;
 	ui: TUI;
-	composition: ShellComposition;
-	footer: ShellComposition["footer"];
-	footerDataProvider: ShellComposition["footerDataProvider"];
+	layout: ShellLayoutComponent;
+	footer: ShellLayoutComponent["footer"];
+	footerDataProvider: ShellLayoutComponent["footerDataProvider"];
 	state: CliState;
 	chatContainer: Container;
 	getEditor(): Component;
@@ -276,7 +276,7 @@ async function showApiKeyLoginDialog(
 		providerName,
 	);
 
-	dependencies.composition.setEditorHost(dialog);
+	dependencies.layout.setEditorHost(dialog);
 
 	try {
 		const apiKey = (await dialog.showPrompt("Enter API key:")).trim();
@@ -285,10 +285,10 @@ async function showApiKeyLoginDialog(
 		}
 
 		dependencies.session.modelRegistry.authStorage.set(providerId, { type: "api_key", key: apiKey });
-		dependencies.composition.restoreEditorHost(dependencies.getEditor());
+		dependencies.layout.restoreEditorHost(dependencies.getEditor());
 		await completeProviderAuthentication(dependencies, providerId, providerName, "api_key", previousModel);
 	} catch (error: unknown) {
-		dependencies.composition.restoreEditorHost(dependencies.getEditor());
+		dependencies.layout.restoreEditorHost(dependencies.getEditor());
 		const errorMsg = error instanceof Error ? error.message : String(error);
 		if (errorMsg !== "Login cancelled") {
 			showError(dependencies, `Failed to save API key for ${providerName}: ${errorMsg}`);
@@ -317,7 +317,7 @@ async function showSelfHostedProviderDialog(
 		`Configure self-hosted ${providerName}`,
 	);
 
-	dependencies.composition.setEditorHost(dialog);
+	dependencies.layout.setEditorHost(dialog);
 
 	try {
 		const enteredBaseUrl = (await dialog.showPrompt("Enter base URL:", defaultBaseUrl)).trim();
@@ -338,7 +338,7 @@ async function showSelfHostedProviderDialog(
 			await dependencies.session.setModel(selectedModel);
 		}
 
-		dependencies.composition.restoreEditorHost(dependencies.getEditor());
+		dependencies.layout.restoreEditorHost(dependencies.getEditor());
 		await updateAvailableProviderCount(dependencies);
 		dependencies.footer.invalidate();
 		dependencies.updateEditorBorderColor();
@@ -349,7 +349,7 @@ async function showSelfHostedProviderDialog(
 				: `Configured self-hosted ${providerName}.`,
 		);
 	} catch (error: unknown) {
-		dependencies.composition.restoreEditorHost(dependencies.getEditor());
+		dependencies.layout.restoreEditorHost(dependencies.getEditor());
 		const errorMsg = error instanceof Error ? error.message : String(error);
 		if (errorMsg !== "Login cancelled") {
 			showError(dependencies, `Failed to configure self-hosted ${providerName}: ${errorMsg}`);
@@ -376,7 +376,7 @@ async function showLoginDialog(
 		providerName,
 	);
 
-	dependencies.composition.setEditorHost(dialog);
+	dependencies.layout.setEditorHost(dialog);
 
 	let manualCodeResolve: ((code: string) => void) | undefined;
 	let manualCodeReject: ((err: Error) => void) | undefined;
@@ -421,10 +421,10 @@ async function showLoginDialog(
 			signal: dialog.signal,
 		});
 
-		dependencies.composition.restoreEditorHost(dependencies.getEditor());
+		dependencies.layout.restoreEditorHost(dependencies.getEditor());
 		await completeProviderAuthentication(dependencies, providerId, providerName, "oauth", previousModel);
 	} catch (error: unknown) {
-		dependencies.composition.restoreEditorHost(dependencies.getEditor());
+		dependencies.layout.restoreEditorHost(dependencies.getEditor());
 		const errorMsg = error instanceof Error ? error.message : String(error);
 		if (errorMsg !== "Login cancelled") {
 			showError(dependencies, `Failed to login to ${providerName}: ${errorMsg}`);
@@ -437,10 +437,10 @@ function showSelector(
 	create: (done: () => void) => { component: Component; focus: Component },
 ): void {
 	const done = () => {
-		dependencies.composition.restoreEditorHost(dependencies.getEditor());
+		dependencies.layout.restoreEditorHost(dependencies.getEditor());
 	};
 	const { component, focus } = create(done);
-	dependencies.composition.setEditorHost(component, focus);
+	dependencies.layout.setEditorHost(component, focus);
 }
 
 function isUnknownModel(model: Model<any> | undefined): boolean {

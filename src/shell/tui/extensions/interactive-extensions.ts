@@ -20,7 +20,7 @@ import type { AgentSession } from "#shell/runtime/agent-session.js";
 import type { KeybindingsManager } from "#shell/runtime/keybindings.js";
 import type { ReadonlyFooterDataProvider } from "#shell/runtime/footer-data-provider.js";
 import type { CliState } from "../state/index.js";
-import type { ShellComposition } from "../layout/composition.js";
+import type { ShellLayoutComponent } from "../layout.js";
 import { ExtensionEditorComponent } from "../components/extension-editor.js";
 import { ExtensionInputComponent } from "../components/extension-input.js";
 import { ExtensionSelectorComponent } from "../components/extension-selector.js";
@@ -29,13 +29,13 @@ import { getEditorTheme, getAvailableThemesWithPaths, getThemeByName, setTheme, 
 
 export interface InteractiveExtensionsOptions {
 	ui: TUI;
-	composition: ShellComposition;
+	layout: ShellLayoutComponent;
 	state: CliState;
 	chatContainer: Container;
 	widgetContainerAbove: Container;
 	widgetContainerBelow: Container;
-	footer: ShellComposition["footer"];
-	footerDataProvider: ShellComposition["footerDataProvider"];
+	footer: ShellLayoutComponent["footer"];
+	footerDataProvider: ShellLayoutComponent["footerDataProvider"];
 	defaultEditor: CustomEditor;
 	keybindings: KeybindingsManager;
 	getSession(): AgentSession;
@@ -279,7 +279,7 @@ export class InteractiveExtensions {
 				{ tui: this.options.ui, timeout: dialogOptions?.timeout },
 			);
 
-			this.options.composition.setEditorHost(this.selector);
+			this.options.layout.setEditorHost(this.selector);
 		});
 	}
 
@@ -317,7 +317,7 @@ export class InteractiveExtensions {
 				{ tui: this.options.ui, timeout: options?.timeout },
 			);
 
-			this.options.composition.setEditorHost(this.input);
+			this.options.layout.setEditorHost(this.input);
 		});
 	}
 
@@ -338,25 +338,25 @@ export class InteractiveExtensions {
 				},
 			);
 
-			this.options.composition.setEditorHost(this.extensionEditor);
+			this.options.layout.setEditorHost(this.extensionEditor);
 		});
 	}
 
 	private hideSelector(): void {
 		this.selector?.dispose();
 		this.selector = undefined;
-		this.options.composition.restoreEditorHost(this.options.getEditor());
+		this.options.layout.restoreEditorHost(this.options.getEditor());
 	}
 
 	private hideInput(): void {
 		this.input?.dispose();
 		this.input = undefined;
-		this.options.composition.restoreEditorHost(this.options.getEditor());
+		this.options.layout.restoreEditorHost(this.options.getEditor());
 	}
 
 	private hideEditor(): void {
 		this.extensionEditor = undefined;
-		this.options.composition.restoreEditorHost(this.options.getEditor());
+		this.options.layout.restoreEditorHost(this.options.getEditor());
 	}
 
 	private setStatus(key: string, text: string | undefined): void {
@@ -540,7 +540,7 @@ export class InteractiveExtensions {
 			this.options.setEditor(this.options.defaultEditor);
 		}
 
-		this.options.composition.restoreEditorHost(this.options.getEditor());
+		this.options.layout.restoreEditorHost(this.options.getEditor());
 	}
 
 	private showNotify(message: string, type?: "info" | "warning" | "error"): void {
@@ -572,7 +572,7 @@ export class InteractiveExtensions {
 
 		const restoreEditor = () => {
 			this.options.getEditor().setText(savedText);
-			this.options.composition.restoreEditorHost(this.options.getEditor());
+			this.options.layout.restoreEditorHost(this.options.getEditor());
 		};
 
 		return new Promise((resolve, reject) => {
@@ -607,7 +607,7 @@ export class InteractiveExtensions {
 						const handle = this.options.ui.showOverlay(component, resolveOptions());
 						options?.onHandle?.(handle);
 					} else {
-						this.options.composition.setEditorHost(component);
+						this.options.layout.setEditorHost(component);
 					}
 				})
 				.catch((err) => {

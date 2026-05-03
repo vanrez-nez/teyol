@@ -2,10 +2,10 @@ import type { AgentSession } from "#shell/runtime/agent-session.js";
 import { type Component, type Container, type EditorComponent, Spacer, Text, type TUI } from "#tui/index.js";
 import { setTheme, getAvailableThemes, theme } from "../../../theme/theme.js";
 import { AssistantMessageComponent } from "../../components/assistant-message.js";
-import { CustomEditor } from "../../components/custom-editor.js";
+import type { CustomEditor } from "../../components/custom-editor.js";
 import { SettingsSelectorComponent } from "../../components/settings-selector.js";
 import { ToolExecutionComponent } from "../../components/tool-execution.js";
-import type { ShellComposition } from "../../layout/composition.js";
+import type { ShellLayoutComponent } from "../../layout.js";
 import type { CliState } from "../../state/index.js";
 import type { TuiCommand } from "../types.js";
 
@@ -13,9 +13,9 @@ export const settingsCommand: TuiCommand<{
 	session: AgentSession;
 	state: CliState;
 	ui: TUI;
-	composition: ShellComposition;
+	layout: ShellLayoutComponent;
 	chatContainer: Container;
-	footer: ShellComposition["footer"];
+	footer: ShellLayoutComponent["footer"];
 	defaultEditor: CustomEditor;
 	getEditor(): EditorComponent;
 	refreshAutocomplete(): void;
@@ -28,7 +28,7 @@ export const settingsCommand: TuiCommand<{
 		session,
 		state,
 		ui,
-		composition,
+		layout,
 		chatContainer,
 		footer,
 		defaultEditor,
@@ -38,7 +38,7 @@ export const settingsCommand: TuiCommand<{
 		updateEditorBorderColor,
 	}) {
 		const restoreEditor = () => {
-			composition.restoreEditorHost(getEditor() as Component);
+			layout.restoreEditorHost(getEditor() as Component);
 		};
 		const selector = new SettingsSelectorComponent(
 			{
@@ -196,6 +196,6 @@ export const settingsCommand: TuiCommand<{
 				},
 			},
 		);
-		composition.setEditorHost(selector, selector.getSettingsList());
+		layout.setEditorHost(selector, selector.getSettingsList());
 	},
 };

@@ -18,7 +18,7 @@ import { loadAsciiLogo, LogoComponent } from "./logo.js";
 import { SkillInvocationMessageComponent } from "./components/skill-invocation-message.js";
 import { ToolExecutionComponent } from "./components/tool-execution.js";
 import { UserMessageComponent } from "./components/user-message.js";
-import type { ShellComposition } from "./layout/composition.js";
+import type { ShellLayoutComponent } from "./layout.js";
 import type { CliState } from "./state/index.js";
 import { getUserMessageText } from "./display-helpers.js";
 
@@ -52,7 +52,7 @@ export interface TimelineDependencies {
   pendingMessagesContainer: Container;
   statusContainer: Container;
   state: CliState;
-  footer: ShellComposition["footer"];
+  footer: ShellLayoutComponent["footer"];
   getSession(): AgentSession;
   getEditor(): EditorComponent;
   getMarkdownTheme(): MarkdownTheme;

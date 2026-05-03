@@ -1,4 +1,4 @@
-import fs from "fs";
+import fs from "node:fs";
 import {
 	configureLogger,
 	getLogFilePath,
@@ -15,7 +15,7 @@ import { LogActionsSelectorComponent, type LogAction } from "../../components/lo
 import { LogLevelsSelectorComponent } from "../../components/log-levels-selector.js";
 import { LogModeSelectorComponent } from "../../components/log-mode-selector.js";
 import { formatLogFileDisplay } from "../../display-helpers.js";
-import type { ShellComposition } from "../../layout/composition.js";
+import type { ShellLayoutComponent } from "../../layout.js";
 import type { TuiCommand } from "../types.js";
 
 const logActions: Array<{ value: LogAction; description: string }> = [
@@ -31,7 +31,7 @@ interface LogDependencies {
 	session: AgentSession;
 	chatContainer: Container;
 	ui: TUI;
-	composition: ShellComposition;
+	layout: ShellLayoutComponent;
 	getEditor(): Component;
 }
 
@@ -101,8 +101,8 @@ function applyLogRotationLines(dependencies: LogDependencies, arg: string): void
 }
 
 function showLogModeSelector(dependencies: LogDependencies): void {
-	const { composition, getEditor, session, ui } = dependencies;
-	const done = () => composition.restoreEditorHost(getEditor());
+	const { layout, getEditor, session, ui } = dependencies;
+	const done = () => layout.restoreEditorHost(getEditor());
 	const selector = new LogModeSelectorComponent(
 		session.settingsManager.getLogMode(),
 		(mode) => {
@@ -114,12 +114,12 @@ function showLogModeSelector(dependencies: LogDependencies): void {
 			ui.requestRender();
 		},
 	);
-	composition.setEditorHost(selector, selector.getSelectList());
+	layout.setEditorHost(selector, selector.getSelectList());
 }
 
 function showLogLevelsSelector(dependencies: LogDependencies): void {
-	const { composition, getEditor, session, ui } = dependencies;
-	const done = () => composition.restoreEditorHost(getEditor());
+	const { layout, getEditor, session, ui } = dependencies;
+	const done = () => layout.restoreEditorHost(getEditor());
 	const selector = new LogLevelsSelectorComponent(
 		session.settingsManager.getLogLevels(),
 		(levels: LogLevel[]) => {
@@ -139,7 +139,7 @@ function showLogLevelsSelector(dependencies: LogDependencies): void {
 			ui.requestRender();
 		},
 	);
-	composition.setEditorHost(selector, selector.getList());
+	layout.setEditorHost(selector, selector.getList());
 }
 
 async function handleLogAction(dependencies: LogDependencies, action: LogAction): Promise<void> {
@@ -177,8 +177,8 @@ async function handleLogAction(dependencies: LogDependencies, action: LogAction)
 }
 
 function showLogActionsSelector(dependencies: LogDependencies): void {
-	const { composition, getEditor, session, ui } = dependencies;
-	const done = () => composition.restoreEditorHost(getEditor());
+	const { layout, getEditor, session, ui } = dependencies;
+	const done = () => layout.restoreEditorHost(getEditor());
 	const selector = new LogActionsSelectorComponent(
 		session.settingsManager.getLogEnabled(),
 		(action) => {
@@ -190,7 +190,7 @@ function showLogActionsSelector(dependencies: LogDependencies): void {
 			ui.requestRender();
 		},
 	);
-	composition.setEditorHost(selector, selector.getSelectList());
+	layout.setEditorHost(selector, selector.getSelectList());
 }
 
 export const logCommand: TuiCommand<LogDependencies> = {

@@ -1,10 +1,14 @@
-import { type Component, Container, ProcessTerminal, TUI } from "#tui/index.js";
 import type { AgentSession } from "#shell/runtime/agent-session.js";
 import { FooterDataProvider } from "#shell/runtime/footer-data-provider.js";
-import { FooterComponent } from "../components/footer.js";
-import { ShellLayoutComponent } from "../components/shell-layout.js";
+import { type Component, Container, ProcessTerminal, truncateToWidth, TUI } from "#tui/index.js";
+import { theme } from "../theme/theme.js";
+import { FooterComponent } from "./components/footer.js";
 
-export interface ShellCompositionOptions {
+export const SIDEBAR_MIN_TERMINAL_WIDTH = 120;
+export const SIDEBAR_WIDTH = 32;
+export const SIDEBAR_SEPARATOR = "│";
+
+export interface ShellLayoutComponentOptions {
 	session: AgentSession;
 	cwd: string;
 	showHardwareCursor: boolean;
@@ -12,9 +16,8 @@ export interface ShellCompositionOptions {
 	editor?: Component;
 }
 
-export class ShellComposition {
+export class ShellLayoutComponent implements Component {
 	readonly ui: TUI;
-	readonly layout: ShellLayoutComponent;
 	readonly timeline = new Container();
 	readonly sidebar = new Container();
 	readonly chat = new Container();
@@ -28,11 +31,10 @@ export class ShellComposition {
 
 	private attached = false;
 
-	constructor(options: ShellCompositionOptions) {
+	constructor(options: ShellLayoutComponentOptions) {
 		this.ui = new TUI(new ProcessTerminal(), options.showHardwareCursor);
 		this.ui.setClearOnShrink(options.clearOnShrink);
 
-		this.layout = new ShellLayoutComponent(this.timeline, this.sidebar);
 		if (options.editor) {
 			this.editorHost.addChild(options.editor);
 		}
@@ -48,9 +50,36 @@ export class ShellComposition {
 		this.footer = new FooterComponent(options.session, this.footerDataProvider);
 	}
 
+	invalidate(): void {
+		this.timeline.invalidate();
+		this.sidebar.invalidate();
+	}
+
+	render(width: number): string[] {
+		if (width < SIDEBAR_MIN_TERMINAL_WIDTH) {
+			return this.timeline.render(width);
+		}
+
+		const timelineWidth = width - SIDEBAR_WIDTH - 1;
+		const timelineLines = this.timeline.render(timelineWidth);
+		const sidebarLines = this.sidebar.render(SIDEBAR_WIDTH);
+		const rowCount = Math.max(timelineLines.length, sidebarLines.length);
+		const lines: string[] = [];
+
+		for (let index = 0; index < rowCount; index++) {
+			const timelineLine = truncateToWidth(timelineLines[index] ?? "", timelineWidth, "", true);
+			const sidebarLine = truncateToWidth(sidebarLines[index] ?? "", SIDEBAR_WIDTH, "", true);
+			const themedSeparator = theme.fg("sidebarBorder", SIDEBAR_SEPARATOR);
+			const themedSidebar = theme.bg("sidebarBg", theme.fg("sidebarText", sidebarLine));
+			lines.push(`${timelineLine}${themedSeparator}${themedSidebar}`);
+		}
+
+		return lines;
+	}
+
 	attachRoot(): void {
 		if (this.attached) return;
-		this.ui.addChild(this.layout);
+		this.ui.addChild(this);
 		this.ui.addChild(this.footer);
 		this.attached = true;
 	}
