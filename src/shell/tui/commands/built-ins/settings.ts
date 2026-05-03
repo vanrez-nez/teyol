@@ -1,7 +1,6 @@
 import type { AgentSession } from "#shell/runtime/agent-session.js";
 import { type Component, type Container, type EditorComponent, Spacer, Text, type TUI } from "#tui/index.js";
 import { setTheme, getAvailableThemes, theme } from "../../../theme/theme.js";
-import { AssistantMessageComponent } from "../../components/assistant-message.js";
 import type { CustomEditor } from "../../components/custom-editor.js";
 import { SettingsSelectorComponent } from "../../components/commands/settings-selector.js";
 import { ToolExecutionComponent } from "../../components/tool-execution.js";
@@ -136,11 +135,6 @@ export const settingsCommand: TuiCommand<{
 				onHideThinkingBlockChange: (hidden) => {
 					state.shell.setHideThinkingBlock(hidden);
 					session.settingsManager.setHideThinkingBlock(hidden);
-					for (const child of chatContainer.children) {
-						if (child instanceof AssistantMessageComponent) {
-							child.setHideThinkingBlock(hidden);
-						}
-					}
 					chatContainer.clear();
 					rebuildChatFromMessages();
 				},

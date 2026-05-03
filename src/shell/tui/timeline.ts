@@ -8,12 +8,12 @@ import type { Component, Container, EditorComponent, MarkdownTheme, TUI } from "
 import { Spacer, Text, TruncatedText } from "#tui/index.js";
 import { APP_NAME } from "../../config.js";
 import { theme } from "../theme/theme.js";
-import { AssistantMessageComponent } from "./components/assistant-message.js";
 import { CompactionSummaryMessageComponent } from "./components/compaction-summary-message.js";
 import { CustomMessageComponent } from "./components/custom-message.js";
 import { DynamicBorder } from "./components/dynamic-border.js";
 import { formatAppKeyDisplay } from "./display-helpers.js";
 import { keyText } from "./components/keybinding-hints.js";
+import { AssistantMessageBlock, type AssistantMessageBlockOptions } from "./components/timeline/assistant-message-block.js";
 import type { LoadedResourcesBlock } from "./components/timeline/loaded-resources-block.js";
 import type { TimelineBlock } from "./components/timeline/base-block.js";
 import { LogoBlock } from "./components/timeline/logo-block.js";
@@ -63,7 +63,7 @@ export interface TimelineOptions {
 export class Timeline {
 	maxVisibleBlocks: number;
 	private blocks: TimelineBlock[] = [];
-	private streamingComponent: AssistantMessageComponent | undefined = undefined;
+	private streamingBlock: AssistantMessageBlock | undefined = undefined;
 	private streamingMessage: AssistantMessage | undefined = undefined;
 	private pendingTools = new Map<string, ToolExecutionComponent>();
 	private lastStatusSpacer: Spacer | undefined = undefined;
@@ -94,6 +94,10 @@ export class Timeline {
 	clearBlocks(): void {
 		this.blocks = [];
 		this.loadedResourcesBlock = undefined;
+	}
+
+	removeBlock(block: TimelineBlock): void {
+		this.blocks = this.blocks.filter((existingBlock) => existingBlock !== block);
 	}
 
 	render(width: number): string[] {
@@ -161,7 +165,7 @@ export class Timeline {
 		this.clearBlocks();
 		this.startupContent = undefined;
 		this.dependencies.pendingMessagesContainer.clear();
-    this.streamingComponent = undefined;
+    this.streamingBlock = undefined;
     this.streamingMessage = undefined;
     this.pendingTools.clear();
     this.lastStatusSpacer = undefined;
@@ -286,14 +290,7 @@ export class Timeline {
         break;
       }
       case "assistant": {
-        chatContainer.addChild(
-          new AssistantMessageComponent(
-            message,
-            state.shell.$hideThinkingBlock.getState(),
-            this.dependencies.getMarkdownTheme(),
-            state.shell.$hiddenThinkingLabel.getState(),
-          ),
-        );
+        this.pushAssistantMessageBlock(message);
         break;
       }
       case "toolResult":
@@ -374,30 +371,27 @@ export class Timeline {
 
   rebuildFromMessages(): void {
     this.dependencies.chatContainer.clear();
+    this.clearBlocks();
+    this.startupContent = undefined;
     const context = this.dependencies.getSession().sessionManager.buildSessionContext();
     this.renderSessionContext(context);
   }
 
   startAssistantMessage(message: AssistantMessage): void {
-    this.streamingComponent = new AssistantMessageComponent(
-      undefined,
-      this.dependencies.state.shell.$hideThinkingBlock.getState(),
-      this.dependencies.getMarkdownTheme(),
-      this.dependencies.state.shell.$hiddenThinkingLabel.getState(),
-    );
+    this.streamingBlock = this.createAssistantMessageBlock({ margin: { top: this.blocks.length > 0 ? 1 : 0 } });
     this.streamingMessage = message;
-    this.dependencies.chatContainer.addChild(this.streamingComponent);
-    this.streamingComponent.updateContent(this.streamingMessage);
+    this.pushBlock(this.streamingBlock);
+    this.streamingBlock.updateContent(this.streamingMessage);
     this.dependencies.ui.requestRender();
   }
 
   updateAssistantMessage(message: AssistantMessage): void {
-    if (!this.streamingComponent) {
+    if (!this.streamingBlock) {
       return;
     }
 
     this.streamingMessage = message;
-    this.streamingComponent.updateContent(this.streamingMessage);
+    this.streamingBlock.updateContent(this.streamingMessage);
 
     for (const content of this.streamingMessage.content) {
       if (content.type === "toolCall") {
@@ -415,7 +409,7 @@ export class Timeline {
   }
 
   finishAssistantMessage(message: AssistantMessage): void {
-    if (!this.streamingComponent) {
+    if (!this.streamingBlock) {
       return;
     }
 
@@ -427,7 +421,7 @@ export class Timeline {
         retryAttempt > 0 ? `Aborted after ${retryAttempt} retry attempt${retryAttempt > 1 ? "s" : ""}` : "Operation aborted";
       this.streamingMessage.errorMessage = errorMessage;
     }
-    this.streamingComponent.updateContent(this.streamingMessage);
+    this.streamingBlock.updateContent(this.streamingMessage);
 
     if (this.streamingMessage.stopReason === "aborted" || this.streamingMessage.stopReason === "error") {
       if (!errorMessage) {
@@ -445,16 +439,16 @@ export class Timeline {
         component.setArgsComplete();
       }
     }
-    this.streamingComponent = undefined;
+    this.streamingBlock = undefined;
     this.streamingMessage = undefined;
     this.dependencies.footer.invalidate();
     this.dependencies.ui.requestRender();
   }
 
   removeStreamingAssistant(): void {
-    if (this.streamingComponent) {
-      this.dependencies.chatContainer.removeChild(this.streamingComponent);
-      this.streamingComponent = undefined;
+    if (this.streamingBlock) {
+      this.removeBlock(this.streamingBlock);
+      this.streamingBlock = undefined;
       this.streamingMessage = undefined;
     }
   }
@@ -511,13 +505,10 @@ export class Timeline {
 
   setHiddenThinkingLabel(label?: string): void {
     this.dependencies.state.shell.setHiddenThinkingLabel(label);
-    for (const child of this.dependencies.chatContainer.children) {
-      if (child instanceof AssistantMessageComponent) {
-        child.setHiddenThinkingLabel(this.dependencies.state.shell.$hiddenThinkingLabel.getState());
+    for (const block of this.blocks) {
+      if (block instanceof AssistantMessageBlock) {
+        block.setHiddenThinkingLabel(this.dependencies.state.shell.$hiddenThinkingLabel.getState());
       }
-    }
-    if (this.streamingComponent) {
-      this.streamingComponent.setHiddenThinkingLabel(this.dependencies.state.shell.$hiddenThinkingLabel.getState());
     }
     this.dependencies.ui.requestRender();
   }
@@ -544,10 +535,10 @@ export class Timeline {
     this.dependencies.chatContainer.clear();
     this.rebuildFromMessages();
 
-    if (this.streamingComponent && this.streamingMessage) {
-      this.streamingComponent.setHideThinkingBlock(this.dependencies.state.shell.$hideThinkingBlock.getState());
-      this.streamingComponent.updateContent(this.streamingMessage);
-      this.dependencies.chatContainer.addChild(this.streamingComponent);
+    if (this.streamingBlock && this.streamingMessage) {
+      this.streamingBlock.setHideThinkingBlock(this.dependencies.state.shell.$hideThinkingBlock.getState());
+      this.streamingBlock.updateContent(this.streamingMessage);
+      this.pushBlock(this.streamingBlock);
     }
   }
 
@@ -583,5 +574,23 @@ export class Timeline {
 				margin: { top: this.blocks.length > 0 ? 1 : 0 },
 			}),
 		);
+	}
+
+	private pushAssistantMessageBlock(message: AssistantMessage): void {
+		this.pushBlock(
+			this.createAssistantMessageBlock({
+				message,
+				margin: { top: this.blocks.length > 0 ? 1 : 0 },
+			}),
+		);
+	}
+
+	private createAssistantMessageBlock(options: AssistantMessageBlockOptions = {}): AssistantMessageBlock {
+		return new AssistantMessageBlock({
+			hideThinkingBlock: this.dependencies.state.shell.$hideThinkingBlock.getState(),
+			markdownTheme: this.dependencies.getMarkdownTheme(),
+			hiddenThinkingLabel: this.dependencies.state.shell.$hiddenThinkingLabel.getState(),
+			...options,
+		});
 	}
 }

@@ -1,5 +1,4 @@
 // UI Components for extensions
-export { AssistantMessageComponent } from "./assistant-message.js";
 export { BorderedLoader } from "./bordered-loader.js";
 export { CompactionSummaryMessageComponent } from "./compaction-summary-message.js";
 export { CustomEditor } from "./custom-editor.js";
@@ -15,6 +14,12 @@ export { ShowImagesSelectorComponent } from "./show-images-selector.js";
 export { SkillInvocationMessageComponent } from "./skill-invocation-message.js";
 export { ThemeSelectorComponent } from "./theme-selector.js";
 export { ThinkingSelectorComponent } from "./thinking-selector.js";
+export {
+	AssistantMessageBlock,
+	type AssistantMessageBlockOptions,
+	type AssistantMessageBlockState,
+	type SerializedAssistantMessageBlock,
+} from "./timeline/assistant-message-block.js";
 export {
 	LoadedResourcesBlock,
 	type LoadedResourcesBlockOptions,

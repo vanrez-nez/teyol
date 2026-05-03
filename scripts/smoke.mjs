@@ -35,7 +35,7 @@ import {
 	getUserMessageText,
 } from "../dist/shell/tui/display-helpers.js";
 import { Timeline } from "../dist/shell/tui/timeline.js";
-import { LoadedResourcesBlock, TimelineBlock, UserMessageBlock } from "../dist/shell/tui/components/index.js";
+import { AssistantMessageBlock, LoadedResourcesBlock, TimelineBlock, UserMessageBlock } from "../dist/shell/tui/components/index.js";
 import { showLoadedResources } from "../dist/shell/tui/extensions/loaded-resources.js";
 import { buildHotkeyHelpMarkdown } from "../dist/shell/tui/hotkeys/help.js";
 import { Container, visibleWidth } from "../dist/tui/index.js";
@@ -530,6 +530,11 @@ function createTimelineForTest(options = {}) {
 	const editor = options.editor ?? {
 		addToHistory() {},
 	};
+	const state = createCliState({
+		hideThinkingBlock: options.hideThinkingBlock ?? false,
+		hiddenThinkingLabel: "thinking",
+		autoCompactEnabled: false,
+	});
 	const timeline = new Timeline(
 		{
 			ui: {
@@ -538,11 +543,7 @@ function createTimelineForTest(options = {}) {
 			chatContainer,
 			pendingMessagesContainer: new Container(),
 			statusContainer: new Container(),
-			state: createCliState({
-				hideThinkingBlock: false,
-				hiddenThinkingLabel: "thinking",
-				autoCompactEnabled: false,
-			}),
+			state,
 			footer: {
 				invalidate() {},
 			},
@@ -554,7 +555,7 @@ function createTimelineForTest(options = {}) {
 		},
 		options.timelineOptions ?? options,
 	);
-	return { timeline, chatContainer, editor };
+	return { timeline, chatContainer, editor, state };
 }
 
 function createShellLayoutForTest(options = {}) {
@@ -823,6 +824,98 @@ function testTimelineLoadedResourcesPlacement() {
 	assert.doesNotMatch(rendered, /one/);
 }
 
+function createAssistantMessage(content, overrides = {}) {
+	return {
+		role: "assistant",
+		content,
+		api: "chat",
+		provider: "openai",
+		model: "test-model",
+		timestamp: Date.now(),
+		...overrides,
+	};
+}
+
+function testAssistantMessageBlock() {
+	initTheme("dark", false);
+	const message = createAssistantMessage([{ type: "text", text: "assistant hello" }]);
+	const block = new AssistantMessageBlock({ id: "assistant-1", message });
+	const rendered = block.render(80);
+	assert.ok(rendered[0].includes("\x1b]133;A\x07"));
+	assert.ok(rendered[rendered.length - 1].includes("\x1b]133;B\x07"));
+	assert.ok(rendered[rendered.length - 1].includes("\x1b]133;C\x07"));
+	assert.match(rendered.join("\n"), /assistant hello/);
+	assert.deepEqual(block.serialize(), {
+		type: "assistant-message",
+		id: "assistant-1",
+		state: { message },
+	});
+}
+
+function testAssistantMessageBlockThinkingVisibility() {
+	initTheme("dark", false);
+	const message = createAssistantMessage([{ type: "thinking", thinking: "hidden chain" }]);
+	const block = new AssistantMessageBlock({
+		message,
+		hideThinkingBlock: true,
+		hiddenThinkingLabel: "Reasoning hidden",
+	});
+	assert.match(block.render(80).join("\n"), /Reasoning hidden/);
+	assert.doesNotMatch(block.render(80).join("\n"), /hidden chain/);
+
+	block.setHideThinkingBlock(false);
+	assert.match(block.render(80).join("\n"), /hidden chain/);
+}
+
+function testAssistantMessageBlockErrorsAndToolCalls() {
+	initTheme("dark", false);
+	const aborted = new AssistantMessageBlock({
+		message: createAssistantMessage([], { stopReason: "aborted", errorMessage: "Stopped" }),
+	});
+	assert.match(aborted.render(80).join("\n"), /Stopped/);
+
+	const toolCall = new AssistantMessageBlock({
+		message: createAssistantMessage([{ type: "toolCall", id: "tool-1", name: "demo", arguments: {} }]),
+	});
+	const rendered = toolCall.render(80).join("\n");
+	assert.doesNotMatch(rendered, /\x1b]133;A\x07/);
+}
+
+function testTimelineAssistantMessageBlocks() {
+	initTheme("dark", false);
+	const { timeline, chatContainer } = createTimelineForTest();
+	timeline.addMessage(createAssistantMessage([{ type: "text", text: "history assistant" }]));
+	assert.equal(chatContainer.children.length, 1);
+	assert.match(timeline.render(80).join("\n"), /history assistant/);
+}
+
+function testTimelineStreamingAssistantBlock() {
+	initTheme("dark", false);
+	const { timeline } = createTimelineForTest();
+	timeline.startAssistantMessage(createAssistantMessage([{ type: "text", text: "first" }]));
+	assert.match(timeline.render(80).join("\n"), /first/);
+
+	timeline.updateAssistantMessage(createAssistantMessage([{ type: "text", text: "second" }]));
+	const updated = timeline.render(80).join("\n");
+	assert.doesNotMatch(updated, /first/);
+	assert.match(updated, /second/);
+
+	timeline.removeStreamingAssistant();
+	assert.doesNotMatch(timeline.render(80).join("\n"), /second/);
+}
+
+function testTimelineAssistantHiddenThinkingLabel() {
+	initTheme("dark", false);
+	const { timeline } = createTimelineForTest({ hideThinkingBlock: true });
+	timeline.addMessage(
+		createAssistantMessage([{ type: "thinking", thinking: "private thought" }]),
+	);
+	timeline.setHiddenThinkingLabel("Reasoning hidden");
+	const rendered = timeline.render(80).join("\n");
+	assert.match(rendered, /Reasoning hidden/);
+	assert.doesNotMatch(rendered, /private thought/);
+}
+
 function testUserMessageBlock() {
 	initTheme("dark", false);
 	const block = new UserMessageBlock({ id: "user-1", text: "hello **world**" });
@@ -1027,6 +1120,12 @@ testLoadedResourcesBlock();
 testShowLoadedResourcesBuildsBlock();
 testShowLoadedResourcesDiagnosticsWhenQuiet();
 testTimelineLoadedResourcesPlacement();
+testAssistantMessageBlock();
+testAssistantMessageBlockThinkingVisibility();
+testAssistantMessageBlockErrorsAndToolCalls();
+testTimelineAssistantMessageBlocks();
+testTimelineStreamingAssistantBlock();
+testTimelineAssistantHiddenThinkingLabel();
 testUserMessageBlock();
 testTimelineUserMessageBlocks();
 testTimelineSkillBlockTrailingUserMessage();
