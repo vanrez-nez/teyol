@@ -28,6 +28,7 @@ import { listModels } from "#shell/cli/list-models.js";
 import { runPrintMode } from "#shell/print/print-mode.js";
 import { runRpcMode } from "#shell/rpc/rpc-mode.js";
 import { selectSession } from "#shell/cli/session-picker.js";
+import { logger } from "#logger";
 import {
 	$auth,
 	$extensions,
@@ -87,6 +88,31 @@ function collectStateDiagnostics(): ShellDiagnostic[] {
     ...$session.getState().diagnostics,
     ...$runtime.getState().diagnostics,
   ];
+}
+
+function getStartupStateSnapshot() {
+  const runtime = $runtime.getState();
+  const runtimeHost = runtime.runtime;
+  return {
+    settings: $settings.getState(),
+    auth: $auth.getState(),
+    extensions: $extensions.getState(),
+    skills: $skills.getState(),
+    prompts: $prompts.getState(),
+    themes: $themes.getState(),
+    modelProviders: $modelProviders.getState(),
+    session: $session.getState(),
+    runtime: {
+      status: runtime.status,
+      diagnostics: runtime.diagnostics,
+      cwd: runtimeHost?.cwd,
+      sessionId: runtimeHost?.session.sessionManager.getSessionId(),
+    },
+  };
+}
+
+function debugStartupStateSettled(): void {
+  logger.debug("state.startup.settled", getStartupStateSnapshot());
 }
 
 type AppMode = "interactive" | "print" | "json" | "rpc";
@@ -421,7 +447,8 @@ export async function main(args: string[]) {
         runtimeFailed({
           diagnostics: [diagnostic],
         });
-      });
+      })
+      .finally(debugStartupStateSettled);
 
     const interactiveMode = new InteractiveMode({
       initialMessages: parsed.messages,
@@ -440,6 +467,8 @@ export async function main(args: string[]) {
     const diagnostic = errorDiagnostic(error);
     runtimeFailed({ diagnostics: [diagnostic] });
     throw error;
+  } finally {
+    debugStartupStateSettled();
   }
 
   const { settingsManager, modelRegistry } = runtime.services;
