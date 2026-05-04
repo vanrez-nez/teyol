@@ -31,7 +31,8 @@ import { getUserExtensionsDir, isBunRuntime } from "../../config.js";
 import { type GitSource, parseGitUrl } from "../../utils/git.js";
 import { canonicalizePath, isLocalPath } from "../../utils/paths.js";
 const isStdoutTakenOver = () => false;
-import type { PackageSource, SettingsManager } from "./settings-manager.js";
+import { $settings } from "#shell/state/index.js";
+import type { PackageSource, Settings, SettingsManager } from "./settings-manager.js";
 
 const NETWORK_TIMEOUT_MS = 10000;
 const UPDATE_CHECK_CONCURRENCY = 4;
@@ -742,7 +743,7 @@ export class DefaultPackageManager implements PackageManager {
 
 	addSourceToSettings(source: string, options?: { local?: boolean }): boolean {
 		const scope: SourceScope = "user";
-		const currentSettings = this.settingsManager.getGlobalSettings();
+		const currentSettings = $settings.getState().values.raw;
 		const currentPackages = currentSettings.packages ?? [];
 		const normalizedSource = this.normalizePackageSourceForSettings(source, scope);
 		const exists = currentPackages.some((existing) => this.packageSourcesMatch(existing, source, scope));
@@ -756,7 +757,7 @@ export class DefaultPackageManager implements PackageManager {
 
 	removeSourceFromSettings(source: string, options?: { local?: boolean }): boolean {
 		const scope: SourceScope = "user";
-		const currentSettings = this.settingsManager.getGlobalSettings();
+		const currentSettings = $settings.getState().values.raw;
 		const currentPackages = currentSettings.packages ?? [];
 		const nextPackages = currentPackages.filter((existing) => !this.packageSourcesMatch(existing, source, scope));
 		const changed = nextPackages.length !== currentPackages.length;
@@ -808,7 +809,7 @@ export class DefaultPackageManager implements PackageManager {
 
 	async resolve(onMissing?: (source: string) => Promise<MissingSourceAction>): Promise<ResolvedPaths> {
 		const accumulator = this.createAccumulator();
-		const globalSettings = this.settingsManager.getGlobalSettings();
+		const globalSettings = $settings.getState().values.raw;
 
 		const allPackages: Array<{ pkg: PackageSource; scope: SourceScope }> = [];
 		for (const pkg of globalSettings.packages ?? []) {
@@ -853,7 +854,7 @@ export class DefaultPackageManager implements PackageManager {
 	}
 
 	listConfiguredPackages(): ConfiguredPackage[] {
-		const globalSettings = this.settingsManager.getGlobalSettings();
+		const globalSettings = $settings.getState().values.raw;
 		const configuredPackages: ConfiguredPackage[] = [];
 
 		for (const pkg of globalSettings.packages ?? []) {
@@ -922,7 +923,7 @@ export class DefaultPackageManager implements PackageManager {
 	}
 
 	async update(source?: string): Promise<void> {
-		const globalSettings = this.settingsManager.getGlobalSettings();
+		const globalSettings = $settings.getState().values.raw;
 		const identity = source ? this.getPackageIdentity(source) : undefined;
 		let matched = false;
 		const updateSources: ConfiguredUpdateSource[] = [];
@@ -1036,7 +1037,7 @@ export class DefaultPackageManager implements PackageManager {
 			return [];
 		}
 
-		const globalSettings = this.settingsManager.getGlobalSettings();
+		const globalSettings = $settings.getState().values.raw;
 		const allPackages: Array<{ pkg: PackageSource; scope: SourceScope }> = [];
 		for (const pkg of globalSettings.packages ?? []) {
 			allPackages.push({ pkg, scope: "user" });
@@ -1552,7 +1553,7 @@ export class DefaultPackageManager implements PackageManager {
 	}
 
 	private getNpmCommand(): { command: string; args: string[] } {
-		const configuredCommand = this.settingsManager.getNpmCommand();
+		const configuredCommand = $settings.getState().values.npmCommand;
 		if (!configuredCommand || configuredCommand.length === 0) {
 			return { command: "npm", args: [] };
 		}
@@ -1569,7 +1570,7 @@ export class DefaultPackageManager implements PackageManager {
 	}
 
 	private getGitDependencyInstallArgs(): string[] {
-		const configuredCommand = this.settingsManager.getNpmCommand();
+		const configuredCommand = $settings.getState().values.npmCommand;
 		if (configuredCommand && configuredCommand.length > 0) {
 			return ["install"];
 		}
@@ -1999,7 +2000,7 @@ export class DefaultPackageManager implements PackageManager {
 
 	private addAutoDiscoveredResources(
 		accumulator: ResourceAccumulator,
-		globalSettings: ReturnType<SettingsManager["getGlobalSettings"]>,
+		globalSettings: Settings,
 		globalBaseDir: string,
 	): void {
 		const userMetadata: PathMetadata = {

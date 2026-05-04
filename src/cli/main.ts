@@ -176,7 +176,6 @@ async function createSessionManager(
   parsed: Args,
   cwd: string,
   sessionDir: string | undefined,
-  settingsManager: SettingsManager,
 ): Promise<SessionManager> {
   if (parsed.noSession) return SessionManager.inMemory();
   if (parsed.fork) {
@@ -199,7 +198,7 @@ async function createSessionManager(
     process.exit(1);
   }
   if (parsed.resume) {
-    initTheme(settingsManager.getTheme(), true);
+    initTheme($settings.getState().values.theme, true);
     try {
       const selectedPath = await selectSession(
         (onProgress) => SessionManager.list(cwd, sessionDir, onProgress),
@@ -220,7 +219,6 @@ function buildSessionOptions(
   scopedModels: ScopedModel[],
   hasExistingSession: boolean,
   modelRegistry: ModelRegistry,
-  settingsManager: SettingsManager,
 ) {
   const options: any = {};
   const diagnostics: ShellDiagnostic[] = [];
@@ -244,8 +242,9 @@ function buildSessionOptions(
   }
 
   if (!options.model && scopedModels.length > 0 && !hasExistingSession) {
-    const savedProvider = settingsManager.getDefaultProvider();
-    const savedModelId = settingsManager.getDefaultModel();
+    const settings = $settings.getState().values;
+    const savedProvider = settings.defaultProvider;
+    const savedModelId = settings.defaultModel;
     const savedModel = savedProvider && savedModelId ? modelRegistry.find(savedProvider, savedModelId) : undefined;
     const savedInScope = savedModel ? scopedModels.find((sm) => modelsAreEqual(sm.model, savedModel)) : undefined;
     if (savedInScope) {
@@ -323,7 +322,7 @@ function createMainRuntimeFactory(options: {
 	      throw error;
 	    }
 
-    const { settingsManager, modelRegistry } = services;
+    const { modelRegistry } = services;
     modelProvidersLoading({ totalCount: modelRegistry.getAll().length });
 
     try {
@@ -348,7 +347,7 @@ function createMainRuntimeFactory(options: {
       });
     }
 
-    const modelPatterns = parsed.models ?? settingsManager.getEnabledModels();
+    const modelPatterns = parsed.models ?? $settings.getState().values.enabledModels;
     const scopedModels = modelPatterns ? await resolveModelScope(modelPatterns, modelRegistry) : [];
 
     const { options: sessionOptions, diagnostics } = buildSessionOptions(
@@ -356,7 +355,6 @@ function createMainRuntimeFactory(options: {
       scopedModels,
       sessionManager.buildSessionContext().messages.length > 0,
       modelRegistry,
-      settingsManager,
     );
     if (diagnostics.length > 0) {
       const availableCount = modelRegistry.getAvailable().length;
@@ -420,17 +418,17 @@ export async function main(args: string[]) {
 
   const cwd = process.cwd();
   const agentDir = getAgentDir();
-  const startupSettingsManager = SettingsManager.create(cwd, agentDir);
-  const sessionDir = parsed.sessionDir ?? startupSettingsManager.getSessionDir();
+  SettingsManager.create(cwd, agentDir);
+  const sessionDir = parsed.sessionDir ?? $settings.getState().values.sessionDir;
 
   let appMode = resolveAppMode(parsed, process.stdin.isTTY);
-  const sessionManager = await createSessionManager(parsed, cwd, sessionDir, startupSettingsManager);
+  const sessionManager = await createSessionManager(parsed, cwd, sessionDir);
 
   const authStorage = AuthStorage.create();
   const createRuntime = createMainRuntimeFactory({ cwd, agentDir, authStorage, parsed });
 
   if (appMode === "interactive") {
-    initTheme(startupSettingsManager.getTheme(), true);
+    initTheme($settings.getState().values.theme, true);
     runtimeLoading();
 
     void createAgentSessionRuntime(
@@ -471,7 +469,7 @@ export async function main(args: string[]) {
     debugStartupStateSettled();
   }
 
-  const { settingsManager, modelRegistry } = runtime.services;
+  const { modelRegistry } = runtime.services;
   const runtimeDiagnostics = collectStateDiagnostics();
   if (runtimeDiagnostics.length > 0) {
     reportDiagnostics(runtimeDiagnostics);
@@ -489,11 +487,11 @@ export async function main(args: string[]) {
 
   const { initialMessage, initialImages } = await prepareInitialMessage(
     parsed,
-    settingsManager.getImageAutoResize(),
+    $settings.getState().values.images.autoResize,
     stdinContent,
   );
 
-  initTheme(settingsManager.getTheme(), false);
+  initTheme($settings.getState().values.theme, false);
 
   if (appMode === "rpc") {
     await runRpcMode(runtime);

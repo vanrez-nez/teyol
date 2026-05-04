@@ -1,4 +1,4 @@
-import type { SettingsManager } from "#shell/runtime/settings-manager.js";
+import { $settings } from "#shell/state/index.js";
 
 function isTruthyEnvFlag(value: string | undefined): boolean {
 	if (!value) return false;
@@ -6,8 +6,7 @@ function isTruthyEnvFlag(value: string | undefined): boolean {
 }
 
 export function isInstallTelemetryEnabled(
-	settingsManager: SettingsManager,
 	telemetryEnv: string | undefined = process.env.TEYOL_TELEMETRY,
 ): boolean {
-	return telemetryEnv !== undefined ? isTruthyEnvFlag(telemetryEnv) : settingsManager.getEnableInstallTelemetry();
+	return telemetryEnv !== undefined ? isTruthyEnvFlag(telemetryEnv) : $settings.getState().values.enableInstallTelemetry;
 }

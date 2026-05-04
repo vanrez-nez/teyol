@@ -16,7 +16,7 @@ import { getDefaultSessionDir, SessionManager } from "./session-manager.js";
 import { SettingsManager } from "./settings-manager.js";
 import { isInstallTelemetryEnabled } from "../../utils/telemetry.js";
 import { time } from "./timings.js";
-import { sessionDiagnosticsReported } from "#shell/state/index.js";
+import { $settings, sessionDiagnosticsReported } from "#shell/state/index.js";
 
 export interface CreateAgentSessionOptions {
 	/** Working directory for project-local discovery. Default: process.cwd() */
@@ -97,11 +97,8 @@ function getDefaultAgentDir(): string {
 	return getAgentDir();
 }
 
-function getAttributionHeaders(
-	model: Model<any>,
-	settingsManager: SettingsManager,
-): Record<string, string> | undefined {
-	if (!isInstallTelemetryEnabled(settingsManager)) {
+function getAttributionHeaders(model: Model<any>): Record<string, string> | undefined {
+	if (!isInstallTelemetryEnabled()) {
 		return undefined;
 	}
 
@@ -163,6 +160,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 	const modelRegistry = options.modelRegistry ?? ModelRegistry.create(authStorage, modelsPath);
 
 	const settingsManager = options.settingsManager ?? SettingsManager.create(cwd, agentDir);
+	const settings = $settings.getState().values;
 	const sessionManager = options.sessionManager ?? SessionManager.create(cwd, getDefaultSessionDir(cwd, agentDir));
 
 	if (!resourceLoader) {
@@ -195,9 +193,9 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		const result = await findInitialModel({
 			scopedModels: [],
 			isContinuing: hasExistingSession,
-			defaultProvider: settingsManager.getDefaultProvider(),
-			defaultModelId: settingsManager.getDefaultModel(),
-			defaultThinkingLevel: settingsManager.getDefaultThinkingLevel(),
+			defaultProvider: $settings.getState().values.defaultProvider,
+			defaultModelId: $settings.getState().values.defaultModel,
+			defaultThinkingLevel: $settings.getState().values.defaultThinkingLevel,
 			modelRegistry,
 		});
 		model = result.model;
@@ -219,12 +217,12 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 	if (thinkingLevel === undefined && hasExistingSession) {
 		thinkingLevel = hasThinkingEntry
 			? (existingSession.thinkingLevel as ThinkingLevel)
-			: (settingsManager.getDefaultThinkingLevel() ?? DEFAULT_THINKING_LEVEL);
+			: ($settings.getState().values.defaultThinkingLevel ?? DEFAULT_THINKING_LEVEL);
 	}
 
 	// Fall back to settings default
 	if (thinkingLevel === undefined) {
-		thinkingLevel = settingsManager.getDefaultThinkingLevel() ?? DEFAULT_THINKING_LEVEL;
+		thinkingLevel = $settings.getState().values.defaultThinkingLevel ?? DEFAULT_THINKING_LEVEL;
 	}
 
 	// Clamp to model capabilities
@@ -241,7 +239,7 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 	const convertToLlmWithBlockImages = (messages: AgentMessage[]): Message[] => {
 		const converted = convertToLlm(messages);
 		// Check setting dynamically so mid-session changes take effect
-		if (!settingsManager.getBlockImages()) {
+		if (!$settings.getState().values.images.blockImages) {
 			return converted;
 		}
 		// Filter out ImageContent from all messages, replacing with text placeholder
@@ -289,8 +287,8 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			if (auth.ok === false) {
 				throw new Error(auth.error);
 			}
-			const providerRetrySettings = settingsManager.getProviderRetrySettings();
-			const attributionHeaders = getAttributionHeaders(model, settingsManager);
+			const providerRetrySettings = $settings.getState().values.retry.provider;
+			const attributionHeaders = getAttributionHeaders(model);
 			return streamSimple(model, context, {
 				...options,
 				apiKey: auth.apiKey,
@@ -327,11 +325,11 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 			if (!runner) return messages;
 			return runner.emitContext(messages);
 		},
-		steeringMode: settingsManager.getSteeringMode(),
-		followUpMode: settingsManager.getFollowUpMode(),
-		transport: settingsManager.getTransport(),
-		thinkingBudgets: settingsManager.getThinkingBudgets(),
-		maxRetryDelayMs: settingsManager.getProviderRetrySettings().maxRetryDelayMs,
+		steeringMode: settings.steeringMode,
+		followUpMode: settings.followUpMode,
+		transport: settings.transport,
+		thinkingBudgets: settings.thinkingBudgets,
+		maxRetryDelayMs: settings.retry.provider.maxRetryDelayMs,
 	});
 
 	// Restore messages if session has existing data

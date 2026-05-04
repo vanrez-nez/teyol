@@ -21,7 +21,7 @@ export async function selectConfig(options: ConfigSelectorOptions): Promise<void
 	OLD CUSTOM TUI IMPLEMENTATION DISABLED DURING INK MIGRATION.
 
 	// Initialize theme before showing TUI
-	initTheme(options.settingsManager.getTheme(), true);
+	initTheme($settings.getState().values.theme, true);
 
 	return new Promise((resolve) => {
 		const ui = new TUI(new ProcessTerminal());

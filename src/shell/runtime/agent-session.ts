@@ -70,6 +70,7 @@ import type { SlashCommandInfo } from "./slash-commands.js";
 import { createSyntheticSourceInfo, type SourceInfo } from "./source-info.js";
 import { type BuildSystemPromptOptions, buildSystemPrompt } from "./system-prompt.js";
 import { createToolDefinitionFromAgentTool } from "./tool-definition-wrapper.js";
+import { $settings } from "#shell/state/index.js";
 
 // ============================================================================
 // Skill Block Parsing
@@ -478,7 +479,7 @@ export class AgentSession {
       return;
     }
 
-    const settings = this.settingsManager.getRetrySettings();
+    const settings = $settings.getState().values.retry;
     if (!settings.enabled) {
       return;
     }
@@ -1573,7 +1574,7 @@ export class AgentSession {
       return explicitLevel;
     }
     if (!this.supportsThinking()) {
-      return this.settingsManager.getDefaultThinkingLevel() ?? DEFAULT_THINKING_LEVEL;
+      return $settings.getState().values.defaultThinkingLevel ?? DEFAULT_THINKING_LEVEL;
     }
     return this.thinkingLevel;
   }
@@ -1641,7 +1642,7 @@ export class AgentSession {
       const { apiKey, headers } = await this._getRequiredRequestAuth(this.model);
 
       const pathEntries = this.sessionManager.getBranch();
-      const settings = this.settingsManager.getCompactionSettings();
+      const settings = $settings.getState().values.compaction;
 
       const preparation = prepareCompaction(pathEntries, settings);
       if (!preparation) {
@@ -1784,7 +1785,7 @@ export class AgentSession {
    * @param skipAbortedCheck If false, include aborted messages (for pre-prompt check). Default: true
    */
   private async _checkCompaction(assistantMessage: AssistantMessage, skipAbortedCheck = true): Promise<void> {
-    const settings = this.settingsManager.getCompactionSettings();
+    const settings = $settings.getState().values.compaction;
     if (!settings.enabled) return;
 
     // Skip if message was aborted (user cancelled) - unless skipAbortedCheck is false
@@ -1867,7 +1868,7 @@ export class AgentSession {
    * Internal: Run auto-compaction with events.
    */
   private async _runAutoCompaction(reason: "overflow" | "threshold", willRetry: boolean): Promise<void> {
-    const settings = this.settingsManager.getCompactionSettings();
+    const settings = $settings.getState().values.compaction;
 
     this._emit({ type: "compaction_start", reason });
     this._autoCompactionAbortController = new AbortController();
@@ -2051,7 +2052,7 @@ export class AgentSession {
 
   /** Whether auto-compaction is enabled */
   get autoCompactionEnabled(): boolean {
-    return this.settingsManager.getCompactionEnabled();
+    return $settings.getState().values.compaction.enabled;
   }
 
   async bindExtensions(bindings: ExtensionBindings): Promise<void> {
@@ -2452,7 +2453,7 @@ export class AgentSession {
    * @returns true if retry was initiated, false if max retries exceeded or disabled
    */
   private async _handleRetryableError(message: AssistantMessage): Promise<boolean> {
-    const settings = this.settingsManager.getRetrySettings();
+    const settings = $settings.getState().values.retry;
     if (!settings.enabled) {
       this._resolveRetry();
       return false;
@@ -2556,7 +2557,7 @@ export class AgentSession {
 
   /** Whether auto-retry is enabled */
   get autoRetryEnabled(): boolean {
-    return this.settingsManager.getRetryEnabled();
+    return $settings.getState().values.retry.enabled;
   }
 
   /**
@@ -2679,7 +2680,7 @@ export class AgentSession {
       if (options.summarize && entriesToSummarize.length > 0 && !extensionSummary) {
         const model = this.model!;
         const { apiKey, headers } = await this._getRequiredRequestAuth(model);
-        const branchSummarySettings = this.settingsManager.getBranchSummarySettings();
+        const branchSummarySettings = $settings.getState().values.branchSummary;
         const result = await generateBranchSummary(entriesToSummarize, {
           model,
           apiKey,

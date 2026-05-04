@@ -5,7 +5,7 @@ import { dirname, join } from "node:path";
 import lockfile from "proper-lockfile";
 import { getAgentDir } from "../../config.js";
 import { LOG_LEVELS, type LogLevel, type LogMode } from "#logger";
-import { settingsFailed, settingsReady } from "#shell/state/index.js";
+import { resolveSettingsValues, settingsChanged, settingsFailed, settingsReady } from "#shell/state/index.js";
 
 export interface CompactionSettings {
 	enabled?: boolean; // default: true
@@ -266,7 +266,7 @@ export class SettingsManager {
 				diagnostics: [{ type: "warning", message: `(user settings) ${settingsLoad.error.message}` }],
 			});
 		} else {
-			settingsReady();
+			settingsReady({ values: resolveSettingsValues(settingsLoad.settings) });
 		}
 
 		return new SettingsManager(storage, settingsLoad.settings, settingsLoad.error);
@@ -371,12 +371,17 @@ export class SettingsManager {
 		return structuredClone(this.globalSettings);
 	}
 
+	private publishSettings(): void {
+		settingsChanged({ values: resolveSettingsValues(this.settings) });
+	}
+
 	async reload(): Promise<void> {
 		await this.writeQueue;
 		const settingsLoad = SettingsManager.tryLoadFromStorage(this.storage, "user");
 		if (!settingsLoad.error) {
 			this.globalSettings = settingsLoad.settings;
 			this.settingsLoadError = null;
+			settingsReady({ values: resolveSettingsValues(settingsLoad.settings) });
 		} else {
 			this.settingsLoadError = settingsLoad.error;
 			this.recordError("user", settingsLoad.error);
@@ -385,11 +390,15 @@ export class SettingsManager {
 		this.modifiedFields.clear();
 		this.modifiedNestedFields.clear();
 		this.settings = structuredClone(this.globalSettings);
+		if (!settingsLoad.error) {
+			this.publishSettings();
+		}
 	}
 
 	/** Apply additional overrides on top of current settings */
 	applyOverrides(overrides: Partial<Settings>): void {
 		this.settings = deepMergeSettings(this.settings, overrides);
+		this.publishSettings();
 	}
 
 	private markModified(field: keyof Settings, nestedKey?: string): void {
@@ -465,6 +474,7 @@ export class SettingsManager {
 
 	private save(): void {
 		this.settings = structuredClone(this.globalSettings);
+		this.publishSettings();
 
 		if (this.settingsLoadError) {
 			return;
