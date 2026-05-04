@@ -1,8 +1,6 @@
 import { renderTuiApp } from "#tui/index.js";
-import type { AgentSessionRuntime } from "#shell/runtime/agent-session-runtime.js";
 
 export interface InteractiveModeOptions {
-	modelFallbackMessage?: string;
 	initialMessage?: string;
 	initialImages?: unknown[];
 	initialMessages?: string[];
@@ -10,13 +8,9 @@ export interface InteractiveModeOptions {
 }
 
 export class InteractiveMode {
-	constructor(
-		private readonly runtimeHost: AgentSessionRuntime,
-		private readonly options: InteractiveModeOptions = {},
-	) {}
+	constructor(private readonly options: InteractiveModeOptions = {}) {}
 
 	async run(): Promise<void> {
-		void this.runtimeHost;
 		void this.options;
 		await renderTuiApp();
 	}

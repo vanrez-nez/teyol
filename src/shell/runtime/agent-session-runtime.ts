@@ -1,7 +1,7 @@
 import { copyFileSync, existsSync, mkdirSync } from "fs";
 import { basename, join, resolve } from "node:path";
 import type { AgentSession } from "#shell/runtime/agent-session.js";
-import type { AgentSessionRuntimeDiagnostic, AgentSessionServices } from "#shell/runtime/agent-session-services.js";
+import type { AgentSessionServices } from "#shell/runtime/agent-session-services.js";
 import type { ReplacedSessionContext, SessionShutdownEvent, SessionStartEvent } from "#shell/runtime/extensions/index.js";
 import { emitSessionShutdownEvent } from "#shell/runtime/extensions/runner.js";
 import type { CreateAgentSessionResult } from "#shell/runtime/sdk.js";
@@ -10,12 +10,10 @@ import { assertSessionCwdExists, SessionManager } from "#shell/runtime/session-m
 /**
  * Result returned by runtime creation.
  *
- * The caller gets the created session, its cwd-bound services, and all
- * diagnostics collected during setup.
+ * The caller gets the created session and its cwd-bound services.
  */
 export interface CreateAgentSessionRuntimeResult extends CreateAgentSessionResult {
 	services: AgentSessionServices;
-	diagnostics: AgentSessionRuntimeDiagnostic[];
 }
 
 /**
@@ -71,8 +69,6 @@ export class AgentSessionRuntime {
 		private _session: AgentSession,
 		private _services: AgentSessionServices,
 		private readonly createRuntime: CreateAgentSessionRuntimeFactory,
-		private _diagnostics: AgentSessionRuntimeDiagnostic[] = [],
-		private _modelFallbackMessage?: string,
 	) {}
 
 	get services(): AgentSessionServices {
@@ -85,14 +81,6 @@ export class AgentSessionRuntime {
 
 	get cwd(): string {
 		return this._services.cwd;
-	}
-
-	get diagnostics(): readonly AgentSessionRuntimeDiagnostic[] {
-		return this._diagnostics;
-	}
-
-	get modelFallbackMessage(): string | undefined {
-		return this._modelFallbackMessage;
 	}
 
 	setRebindSession(rebindSession?: (session: AgentSession) => Promise<void>): void {
@@ -158,8 +146,6 @@ export class AgentSessionRuntime {
 	private apply(result: CreateAgentSessionRuntimeResult): void {
 		this._session = result.session;
 		this._services = result.services;
-		this._diagnostics = result.diagnostics;
-		this._modelFallbackMessage = result.modelFallbackMessage;
 	}
 
 	private async finishSessionReplacement(withSession?: (ctx: ReplacedSessionContext) => Promise<void>): Promise<void> {
@@ -393,13 +379,10 @@ export async function createAgentSessionRuntime(
 		result.session,
 		result.services,
 		createRuntime,
-		result.diagnostics,
-		result.modelFallbackMessage,
 	);
 }
 
 export {
-	type AgentSessionRuntimeDiagnostic,
 	type AgentSessionServices,
 	type CreateAgentSessionFromServicesOptions,
 	type CreateAgentSessionServicesOptions,

@@ -5,6 +5,17 @@ import chalk from "chalk";
 import { getPackageExtensionsDir } from "../../config.js";
 import { loadThemeFromPath, type Theme } from "#shell/theme/theme.js";
 import type { ResourceDiagnostic } from "./diagnostics.js";
+import {
+	extensionFailed,
+	extensionLoading,
+	extensionReady,
+	promptsLoading,
+	promptsReady,
+	skillsLoading,
+	skillsReady,
+	themesLoading,
+	themesReady,
+} from "#shell/state/index.js";
 
 export type { ResourceCollision, ResourceDiagnostic } from "./diagnostics.js";
 
@@ -239,7 +250,7 @@ export class DefaultResourceLoader implements ResourceLoader {
 		this.systemPromptOverride = options.systemPromptOverride;
 		this.appendSystemPromptOverride = options.appendSystemPromptOverride;
 
-		this.extensionsResult = { extensions: [], errors: [], runtime: createExtensionRuntime() };
+		this.extensionsResult = { extensions: [], runtime: createExtensionRuntime() };
 		this.skills = [];
 		this.skillDiagnostics = [];
 		this.prompts = [];
@@ -416,18 +427,24 @@ export class DefaultResourceLoader implements ResourceLoader {
 		const extensionsResult = await loadExtensions(extensionPaths, this.cwd, this.eventBus);
 		const inlineExtensions = await this.loadExtensionFactories(extensionsResult.runtime);
 		extensionsResult.extensions.push(...inlineExtensions.extensions);
-		extensionsResult.errors.push(...inlineExtensions.errors);
 
 		// Detect extension conflicts (tools, commands, flags with same names from different extensions)
 		// Keep all extensions loaded. Conflicts are reported as diagnostics, and precedence is handled by load order.
 		const conflicts = this.detectExtensionConflicts(extensionsResult.extensions);
 		for (const conflict of conflicts) {
-			extensionsResult.errors.push({ path: conflict.path, error: conflict.message });
+			extensionFailed({
+				path: conflict.path,
+				diagnostics: [{ type: "error", message: conflict.message }],
+			});
 		}
 
 		for (const p of this.additionalExtensionPaths) {
 			if (isLocalPath(p) && !existsSync(p)) {
-				extensionsResult.errors.push({ path: p, error: `Extension path does not exist: ${p}` });
+				const error = `Extension path does not exist: ${p}`;
+				extensionFailed({
+					path: p,
+					diagnostics: [{ type: "error", message: error }],
+				});
 			}
 		}
 		this.extensionsResult = this.extensionsOverride ? this.extensionsOverride(extensionsResult) : extensionsResult;
@@ -444,6 +461,10 @@ export class DefaultResourceLoader implements ResourceLoader {
 				this.skillDiagnostics.push({ type: "error", message: "Skill path does not exist", path: p });
 			}
 		}
+		skillsReady({
+			entries: this.skills,
+			diagnostics: this.skillDiagnostics,
+		});
 
 		const promptPaths = this.noPromptTemplates
 			? this.mergePaths(cliEnabledPrompts, this.additionalPromptTemplatePaths)
@@ -456,6 +477,10 @@ export class DefaultResourceLoader implements ResourceLoader {
 				this.promptDiagnostics.push({ type: "error", message: "Prompt template path does not exist", path: p });
 			}
 		}
+		promptsReady({
+			entries: this.prompts,
+			diagnostics: this.promptDiagnostics,
+		});
 
 		const themePaths = this.noThemes
 			? this.mergePaths(cliEnabledThemes, this.additionalThemePaths)
@@ -468,6 +493,10 @@ export class DefaultResourceLoader implements ResourceLoader {
 				this.themeDiagnostics.push({ type: "error", message: "Theme path does not exist", path: p });
 			}
 		}
+		themesReady({
+			entries: this.themes,
+			diagnostics: this.themeDiagnostics,
+		});
 
 		const agentsFiles = {
 			agentsFiles: this.noContextFiles ? [] : loadProjectContextFiles({ cwd: this.cwd, agentDir: this.agentDir }),
@@ -502,6 +531,7 @@ export class DefaultResourceLoader implements ResourceLoader {
 	}
 
 	private updateSkillsFromPaths(skillPaths: string[], metadataByPath?: Map<string, PathMetadata>): void {
+		skillsLoading();
 		let skillsResult: { skills: Skill[]; diagnostics: ResourceDiagnostic[] };
 		if (this.noSkills && skillPaths.length === 0) {
 			skillsResult = { skills: [], diagnostics: [] };
@@ -522,9 +552,14 @@ export class DefaultResourceLoader implements ResourceLoader {
 				this.getDefaultSourceInfoForPath(skill.filePath),
 		}));
 		this.skillDiagnostics = resolvedSkills.diagnostics;
+		skillsReady({
+			entries: this.skills,
+			diagnostics: this.skillDiagnostics,
+		});
 	}
 
 	private updatePromptsFromPaths(promptPaths: string[], metadataByPath?: Map<string, PathMetadata>): void {
+		promptsLoading();
 		let promptsResult: { prompts: PromptTemplate[]; diagnostics: ResourceDiagnostic[] };
 		if (this.noPromptTemplates && promptPaths.length === 0) {
 			promptsResult = { prompts: [], diagnostics: [] };
@@ -546,9 +581,14 @@ export class DefaultResourceLoader implements ResourceLoader {
 				this.getDefaultSourceInfoForPath(prompt.filePath),
 		}));
 		this.promptDiagnostics = resolvedPrompts.diagnostics;
+		promptsReady({
+			entries: this.prompts,
+			diagnostics: this.promptDiagnostics,
+		});
 	}
 
 	private updateThemesFromPaths(themePaths: string[], metadataByPath?: Map<string, PathMetadata>): void {
+		themesLoading();
 		let themesResult: { themes: Theme[]; diagnostics: ResourceDiagnostic[] };
 		if (this.noThemes && themePaths.length === 0) {
 			themesResult = { themes: [], diagnostics: [] };
@@ -568,6 +608,10 @@ export class DefaultResourceLoader implements ResourceLoader {
 			return theme;
 		});
 		this.themeDiagnostics = resolvedThemes.diagnostics;
+		themesReady({
+			entries: this.themes,
+			diagnostics: this.themeDiagnostics,
+		});
 	}
 
 	private applyExtensionSourceInfo(extensions: Extension[], metadataByPath: Map<string, PathMetadata>): void {
@@ -773,23 +817,26 @@ export class DefaultResourceLoader implements ResourceLoader {
 
 	private async loadExtensionFactories(runtime: ExtensionRuntime): Promise<{
 		extensions: Extension[];
-		errors: Array<{ path: string; error: string }>;
 	}> {
 		const extensions: Extension[] = [];
-		const errors: Array<{ path: string; error: string }> = [];
 
 		for (const [index, factory] of this.extensionFactories.entries()) {
 			const extensionPath = `<inline:${index + 1}>`;
+			extensionLoading({ path: extensionPath });
 			try {
 				const extension = await loadExtensionFromFactory(factory, this.cwd, this.eventBus, runtime, extensionPath);
 				extensions.push(extension);
+				extensionReady({ path: extensionPath, resolvedPath: extension.resolvedPath });
 			} catch (error) {
 				const message = error instanceof Error ? error.message : "failed to load extension";
-				errors.push({ path: extensionPath, error: message });
+				extensionFailed({
+					path: extensionPath,
+					diagnostics: [{ type: "error", message }],
+				});
 			}
 		}
 
-		return { extensions, errors };
+		return { extensions };
 	}
 
 	private dedupePrompts(prompts: PromptTemplate[]): { prompts: PromptTemplate[]; diagnostics: ResourceDiagnostic[] } {

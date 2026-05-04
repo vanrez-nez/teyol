@@ -1,6 +1,5 @@
 import React from "react";
 import { render } from "ink";
-import { setTimeout as delay } from "node:timers/promises";
 import { Layout } from "./components/layout.js";
 
 export * from "./components/index.js";
@@ -11,8 +10,6 @@ export function TuiApp() {
 
 export async function renderTuiApp(): Promise<void> {
 	const instance = render(React.createElement(TuiApp));
-	await delay(0);
-	instance.unmount();
 	await instance.waitUntilExit();
 }
 

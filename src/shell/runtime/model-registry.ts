@@ -34,6 +34,7 @@ import {
   resolveConfigValueUncached,
   resolveHeadersOrThrow,
 } from "./resolve-config-value.js";
+import { modelProvidersFailed } from "#shell/state/index.js";
 
 // Schema for OpenRouter routing preferences
 const PercentileCutoffsSchema = Type.Object({
@@ -339,13 +340,6 @@ export class ModelRegistry {
     return this.dynamicRefreshPromise;
   }
 
-  /**
-   * Get any error from loading models.json (undefined if no error).
-   */
-  getError(): string | undefined {
-    return this.loadError;
-  }
-
   configureProviderBaseUrl(provider: string, baseUrl: string): void {
     if (!this.modelsJsonPath) {
       throw new Error("models.json is not available for this model registry.");
@@ -411,6 +405,13 @@ export class ModelRegistry {
     }
 
     this.models = combined;
+    if (error) {
+      modelProvidersFailed({
+        diagnostics: [{ type: "error", message: error }],
+        availableCount: this.getAvailable().length,
+        totalCount: this.getAll().length,
+      });
+    }
   }
 
   /** Load built-in models and apply provider/model overrides */
@@ -628,6 +629,7 @@ export class ModelRegistry {
   }
 
   private async discoverModels(): Promise<void> {
+    const discoveryDiagnostics: Array<{ type: "error"; message: string }> = [];
     const discoveredByProvider = await Promise.all(
       getProviders().map(async (provider) => {
         const metadata = getProviderMetadata(provider);
@@ -649,6 +651,10 @@ export class ModelRegistry {
           const message = error instanceof Error ? error.message : String(error);
           const prefix = this.loadError ? `${this.loadError}\n` : "";
           this.loadError = `${prefix}Failed to discover ${provider} models: ${message}`;
+          discoveryDiagnostics.push({
+            type: "error",
+            message: `Failed to discover ${provider} models: ${message}`,
+          });
         }
 
         return [];
@@ -660,6 +666,13 @@ export class ModelRegistry {
       models = this.mergeCustomModels(models, discoveredModels);
     }
     this.models = this.applyDiscoveryOverrides(models);
+    if (discoveryDiagnostics.length > 0) {
+      modelProvidersFailed({
+        diagnostics: discoveryDiagnostics,
+        availableCount: this.getAvailable().length,
+        totalCount: this.getAll().length,
+      });
+    }
   }
 
   private applyDiscoveryOverrides(models: Model<Api>[]): Model<Api>[] {

@@ -7,6 +7,7 @@ import type { Api, Model } from "#ai/index.js";
 import { fuzzyFilter } from "#tui/index.js";
 import { formatNoModelsAvailableMessage } from "#shell/runtime/auth-guidance.js";
 import type { ModelRegistry } from "#shell/runtime/model-registry.js";
+import { $modelProviders } from "#shell/state/index.js";
 
 /**
  * Format a number as human-readable (e.g., 200000 -> "200K", 1000000 -> "1M")
@@ -28,9 +29,9 @@ function formatTokenCount(count: number): string {
  */
 export async function listModels(modelRegistry: ModelRegistry, searchPattern?: string): Promise<void> {
   await modelRegistry.refreshDynamic();
-  const loadError = modelRegistry.getError();
-  if (loadError) {
-    console.error(chalk.yellow(`Warning: errors loading models.json:\n${loadError}`));
+  const diagnostics = $modelProviders.getState().diagnostics;
+  if (diagnostics.length > 0) {
+    console.error(chalk.yellow(`Warning: errors loading models:\n${diagnostics.map((diagnostic) => diagnostic.message).join("\n")}`));
   }
 
   const models = modelRegistry.getAvailable();

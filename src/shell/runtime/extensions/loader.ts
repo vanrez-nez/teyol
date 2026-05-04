@@ -21,6 +21,7 @@ import { getAgentDir, getUserExtensionsDir, isBunBinary } from "../../../config.
 import * as _bundledAiCli from "../../../index.js";
 import { createEventBus, type EventBus } from "#shell/runtime/event-bus.js";
 import { logger } from "#logger";
+import { extensionFailed, extensionLoading, extensionReady } from "#shell/state/index.js";
 import type { ExecOptions } from "#shell/runtime/exec.js";
 import { execCommand } from "#shell/runtime/exec.js";
 import { createSyntheticSourceInfo } from "#shell/runtime/source-info.js";
@@ -406,18 +407,22 @@ export async function loadExtensionFromFactory(
 /**
  * Load extensions from paths.
  */
-export async function loadExtensions(paths: string[], cwd: string, eventBus?: EventBus): Promise<LoadExtensionsResult> {
+export async function loadExtensions(
+	paths: string[],
+	cwd: string,
+	eventBus?: EventBus,
+): Promise<LoadExtensionsResult> {
 	const extensions: Extension[] = [];
-	const errors: Array<{ path: string; error: string }> = [];
 	const resolvedEventBus = eventBus ?? createEventBus();
 	const runtime = createExtensionRuntime();
 
 	for (const extPath of paths) {
+		extensionLoading({ path: extPath });
 		const { extension, error } = await loadExtension(extPath, cwd, resolvedEventBus, runtime);
 
 		if (error) {
 			logger.error("extension.error", { path: extPath, error });
-			errors.push({ path: extPath, error });
+			extensionFailed({ path: extPath, diagnostics: [{ type: "error", message: error }] });
 			continue;
 		}
 
@@ -429,12 +434,12 @@ export async function loadExtensions(paths: string[], cwd: string, eventBus?: Ev
 				commands: Array.from(extension.commands.keys()),
 			});
 			extensions.push(extension);
+			extensionReady({ path: extPath, resolvedPath: extension.resolvedPath });
 		}
 	}
 
 	return {
 		extensions,
-		errors,
 		runtime,
 	};
 }

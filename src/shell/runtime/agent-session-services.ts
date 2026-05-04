@@ -4,23 +4,13 @@ import type { Model } from "#ai/index.js";
 import { getAgentDir } from "../../config.js";
 import { AuthStorage } from "./auth-storage.js";
 import type { SessionStartEvent, ToolDefinition } from "#shell/runtime/extensions/index.js";
+import { extensionFailed, extensionsReady } from "#shell/state/index.js";
+import type { ShellDiagnostic } from "#shell/state/index.js";
 import { ModelRegistry } from "./model-registry.js";
 import { DefaultResourceLoader, type DefaultResourceLoaderOptions, type ResourceLoader } from "./resource-loader.js";
 import { type CreateAgentSessionOptions, type CreateAgentSessionResult, createAgentSession } from "./sdk.js";
 import type { SessionManager } from "./session-manager.js";
 import { SettingsManager } from "./settings-manager.js";
-
-/**
- * Non-fatal issues collected while creating services or sessions.
- *
- * Runtime creation returns diagnostics to the caller instead of printing or
- * exiting. The app layer decides whether warnings should be shown and whether
- * errors should abort startup.
- */
-export interface AgentSessionRuntimeDiagnostic {
-	type: "info" | "warning" | "error";
-	message: string;
-}
 
 /**
  * Inputs for creating cwd-bound runtime services.
@@ -70,18 +60,17 @@ export interface AgentSessionServices {
 	settingsManager: SettingsManager;
 	modelRegistry: ModelRegistry;
 	resourceLoader: ResourceLoader;
-	diagnostics: AgentSessionRuntimeDiagnostic[];
 }
 
 function applyExtensionFlagValues(
 	resourceLoader: ResourceLoader,
 	extensionFlagValues: Map<string, boolean | string> | undefined,
-): AgentSessionRuntimeDiagnostic[] {
+): void {
 	if (!extensionFlagValues) {
-		return [];
+		return;
 	}
 
-	const diagnostics: AgentSessionRuntimeDiagnostic[] = [];
+	const diagnostics: ShellDiagnostic[] = [];
 	const extensionsResult = resourceLoader.getExtensions();
 	const registeredFlags = new Map<string, { type: "boolean" | "string" }>();
 	for (const extension of extensionsResult.extensions) {
@@ -118,7 +107,12 @@ function applyExtensionFlagValues(
 		});
 	}
 
-	return diagnostics;
+	if (diagnostics.length > 0) {
+		extensionFailed({
+			path: "<extension-flags>",
+			diagnostics,
+		});
+	}
 }
 
 /**
@@ -141,22 +135,22 @@ export async function createAgentSessionServices(
 		settingsManager,
 	});
 	await resourceLoader.reload();
+	extensionsReady();
 
-	const diagnostics: AgentSessionRuntimeDiagnostic[] = [];
 	const extensionsResult = resourceLoader.getExtensions();
 	for (const { name, config, extensionPath } of extensionsResult.runtime.pendingProviderRegistrations) {
 		try {
 			modelRegistry.registerProvider(name, config);
 		} catch (error) {
 			const message = error instanceof Error ? error.message : String(error);
-			diagnostics.push({
-				type: "error",
-				message: `Extension "${extensionPath}" error: ${message}`,
+			extensionFailed({
+				path: extensionPath,
+				diagnostics: [{ type: "error", message }],
 			});
 		}
 	}
 	extensionsResult.runtime.pendingProviderRegistrations = [];
-	diagnostics.push(...applyExtensionFlagValues(resourceLoader, options.extensionFlagValues));
+	applyExtensionFlagValues(resourceLoader, options.extensionFlagValues);
 
 	return {
 		cwd,
@@ -165,7 +159,6 @@ export async function createAgentSessionServices(
 		settingsManager,
 		modelRegistry,
 		resourceLoader,
-		diagnostics,
 	};
 }
 

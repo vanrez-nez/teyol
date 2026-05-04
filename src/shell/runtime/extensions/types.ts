@@ -1244,7 +1244,6 @@ export interface Extension {
 /** Result of loading extensions. */
 export interface LoadExtensionsResult {
 	extensions: Extension[];
-	errors: Array<{ path: string; error: string }>;
 	/** Shared runtime - actions are throwing stubs until runner.initialize() */
 	runtime: ExtensionRuntime;
 }

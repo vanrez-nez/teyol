@@ -19,6 +19,7 @@ import { dirname, join } from "path";
 import lockfile from "proper-lockfile";
 import { getAgentDir } from "../../config.js";
 import { resolveConfigValue } from "./resolve-config-value.js";
+import { authFailed, authReady } from "#shell/state/index.js";
 
 export type ApiKeyCredential = {
 	type: "api_key";
@@ -200,7 +201,6 @@ export class AuthStorage {
 	private runtimeOverrides: Map<string, string> = new Map();
 	private fallbackResolver?: (provider: string) => string | undefined;
 	private loadError: Error | null = null;
-	private errors: Error[] = [];
 
 	private constructor(private storage: AuthStorageBackend) {
 		this.reload();
@@ -245,7 +245,9 @@ export class AuthStorage {
 
 	private recordError(error: unknown): void {
 		const normalizedError = error instanceof Error ? error : new Error(String(error));
-		this.errors.push(normalizedError);
+		authFailed({
+			diagnostics: [{ type: "warning", message: normalizedError.message }],
+		});
 	}
 
 	private parseStorageData(content: string | undefined): AuthStorageData {
@@ -265,11 +267,12 @@ export class AuthStorage {
 				content = current;
 				return { result: undefined };
 			});
-			this.data = this.parseStorageData(content);
-			this.loadError = null;
-		} catch (error) {
-			this.loadError = error as Error;
-			this.recordError(error);
+				this.data = this.parseStorageData(content);
+				this.loadError = null;
+				authReady();
+			} catch (error) {
+				this.loadError = error as Error;
+				this.recordError(error);
 		}
 	}
 
@@ -372,12 +375,6 @@ export class AuthStorage {
 	 */
 	getAll(): AuthStorageData {
 		return { ...this.data };
-	}
-
-	drainErrors(): Error[] {
-		const drained = [...this.errors];
-		this.errors = [];
-		return drained;
 	}
 
 	/**

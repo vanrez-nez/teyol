@@ -16,6 +16,7 @@ import { getDefaultSessionDir, SessionManager } from "./session-manager.js";
 import { SettingsManager } from "./settings-manager.js";
 import { isInstallTelemetryEnabled } from "../../utils/telemetry.js";
 import { time } from "./timings.js";
+import { sessionDiagnosticsReported } from "#shell/state/index.js";
 
 export interface CreateAgentSessionOptions {
 	/** Working directory for project-local discovery. Default: process.cwd() */
@@ -70,8 +71,6 @@ export interface CreateAgentSessionResult {
 	session: AgentSession;
 	/** Extensions result (for UI context setup in interactive mode) */
 	extensionsResult: LoadExtensionsResult;
-	/** Warning if session was restored with a different model than saved */
-	modelFallbackMessage?: string;
 }
 
 // Re-exports
@@ -133,7 +132,7 @@ function getAttributionHeaders(
  * });
  *
  * // Continue previous session
- * const { session, modelFallbackMessage } = await createAgentSession({
+ * const { session } = await createAgentSession({
  *   continueSession: true,
  * });
  *
@@ -207,6 +206,11 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 		} else if (modelFallbackMessage) {
 			modelFallbackMessage += `. Using ${model.provider}/${model.id}`;
 		}
+	}
+	if (modelFallbackMessage) {
+		sessionDiagnosticsReported({
+			diagnostics: [{ type: "warning", message: modelFallbackMessage }],
+		});
 	}
 
 	let thinkingLevel = options.thinkingLevel;
@@ -363,6 +367,5 @@ export async function createAgentSession(options: CreateAgentSessionOptions = {}
 	return {
 		session,
 		extensionsResult,
-		modelFallbackMessage,
 	};
 }

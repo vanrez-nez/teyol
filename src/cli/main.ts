@@ -5,10 +5,12 @@
 import { createInterface } from "node:readline";
 import chalk from "chalk";
 import { modelsAreEqual } from "#ai/index.js";
-import { createAgentSessionRuntime } from "#shell/runtime/agent-session-runtime.js";
+import {
+  createAgentSessionRuntime,
+  type CreateAgentSessionRuntimeFactory,
+} from "#shell/runtime/agent-session-runtime.js";
 import { getAgentDir, VERSION } from "../config.js";
 import {
-  type AgentSessionRuntimeDiagnostic,
   createAgentSessionFromServices,
   createAgentSessionServices,
 } from "#shell/runtime/agent-session-services.js";
@@ -26,6 +28,26 @@ import { listModels } from "#shell/cli/list-models.js";
 import { runPrintMode } from "#shell/print/print-mode.js";
 import { runRpcMode } from "#shell/rpc/rpc-mode.js";
 import { selectSession } from "#shell/cli/session-picker.js";
+import {
+	$auth,
+	$extensions,
+	$modelProviders,
+	$prompts,
+	$runtime,
+	$session,
+	$settings,
+	$skills,
+	$themes,
+	extensionFailed,
+	extensionsLoading,
+	modelProvidersFailed,
+	modelProvidersLoading,
+	modelProvidersReady,
+	runtimeFailed,
+	runtimeLoading,
+	runtimeReady,
+	type ShellDiagnostic,
+} from "#shell/state/index.js";
 
 /**
  * Read all content from piped stdin.
@@ -45,22 +67,26 @@ async function readPipedStdin(): Promise<string | undefined> {
   });
 }
 
-function collectSettingsDiagnostics(
-  settingsManager: SettingsManager,
-  context: string,
-): AgentSessionRuntimeDiagnostic[] {
-  return settingsManager.drainErrors().map(({ scope, error }) => ({
-    type: "warning",
-    message: `(${context}, ${scope} settings) ${error.message}`,
-  }));
-}
-
-function reportDiagnostics(diagnostics: readonly AgentSessionRuntimeDiagnostic[]): void {
+function reportDiagnostics(diagnostics: readonly ShellDiagnostic[]): void {
   for (const diagnostic of diagnostics) {
     const color = diagnostic.type === "error" ? chalk.red : diagnostic.type === "warning" ? chalk.yellow : chalk.dim;
     const prefix = diagnostic.type === "error" ? "Error: " : diagnostic.type === "warning" ? "Warning: " : "";
     console.error(color(`${prefix}${diagnostic.message}`));
   }
+}
+
+function collectStateDiagnostics(): ShellDiagnostic[] {
+  return [
+    ...$settings.getState().diagnostics,
+    ...$auth.getState().diagnostics,
+    ...$extensions.getState().entries.flatMap((entry) => entry.diagnostics),
+    ...$skills.getState().diagnostics,
+    ...$prompts.getState().diagnostics,
+    ...$themes.getState().diagnostics,
+    ...$modelProviders.getState().diagnostics,
+    ...$session.getState().diagnostics,
+    ...$runtime.getState().diagnostics,
+  ];
 }
 
 type AppMode = "interactive" | "print" | "json" | "rpc";
@@ -171,7 +197,7 @@ function buildSessionOptions(
   settingsManager: SettingsManager,
 ) {
   const options: any = {};
-  const diagnostics: AgentSessionRuntimeDiagnostic[] = [];
+  const diagnostics: ShellDiagnostic[] = [];
   let cliThinkingFromModel = false;
 
   if (parsed.model) {
@@ -223,6 +249,126 @@ function buildSessionOptions(
   return { options, cliThinkingFromModel, diagnostics };
 }
 
+function errorDiagnostic(error: unknown): ShellDiagnostic {
+  return {
+    type: "error",
+    message: error instanceof Error ? error.message : String(error),
+  };
+}
+
+function createMainRuntimeFactory(options: {
+  cwd: string;
+  agentDir: string;
+  authStorage: AuthStorage;
+  parsed: Args;
+}): CreateAgentSessionRuntimeFactory {
+  const { cwd, agentDir, authStorage, parsed } = options;
+
+  return async ({ sessionManager, sessionStartEvent }) => {
+    extensionsLoading();
+
+    let services: Awaited<ReturnType<typeof createAgentSessionServices>>;
+    try {
+      services = await createAgentSessionServices({
+	        cwd,
+	        agentDir,
+	        authStorage,
+        resourceLoaderOptions: {
+          additionalExtensionPaths: parsed.extensions,
+          additionalSkillPaths: parsed.skills,
+          additionalPromptTemplatePaths: parsed.promptTemplates,
+          additionalThemePaths: parsed.themes,
+          noExtensions: parsed.noExtensions,
+          noSkills: parsed.noSkills,
+          noPromptTemplates: parsed.noPromptTemplates,
+          noThemes: parsed.noThemes,
+          noContextFiles: parsed.noContextFiles,
+          systemPrompt: parsed.systemPrompt,
+          appendSystemPrompt: parsed.appendSystemPrompt,
+        },
+        extensionFlagValues: parsed.unknownFlags,
+      });
+	    } catch (error) {
+	      const diagnostic = errorDiagnostic(error);
+	      extensionFailed({
+	        path: "<extensions>",
+	        diagnostics: [diagnostic],
+	      });
+	      throw error;
+	    }
+
+    const { settingsManager, modelRegistry } = services;
+    modelProvidersLoading({ totalCount: modelRegistry.getAll().length });
+
+    try {
+      await modelRegistry.refreshDynamic();
+    } catch (error) {
+      const diagnostic = errorDiagnostic(error);
+      modelProvidersFailed({
+        diagnostics: [diagnostic],
+        availableCount: modelRegistry.getAvailable().length,
+        totalCount: modelRegistry.getAll().length,
+      });
+      throw error;
+    }
+
+    const availableCount = modelRegistry.getAvailable().length;
+    const totalCount = modelRegistry.getAll().length;
+    if ($modelProviders.getState().status !== "error") {
+      modelProvidersReady({
+        diagnostics: [],
+        availableCount,
+        totalCount,
+      });
+    }
+
+    const modelPatterns = parsed.models ?? settingsManager.getEnabledModels();
+    const scopedModels = modelPatterns ? await resolveModelScope(modelPatterns, modelRegistry) : [];
+
+    const { options: sessionOptions, diagnostics } = buildSessionOptions(
+      parsed,
+      scopedModels,
+      sessionManager.buildSessionContext().messages.length > 0,
+      modelRegistry,
+      settingsManager,
+    );
+    if (diagnostics.length > 0) {
+      const availableCount = modelRegistry.getAvailable().length;
+      const totalCount = modelRegistry.getAll().length;
+      if (diagnostics.some((diagnostic) => diagnostic.type === "error")) {
+        modelProvidersFailed({
+          diagnostics,
+          availableCount,
+          totalCount,
+        });
+      } else {
+        modelProvidersReady({
+          diagnostics,
+          availableCount,
+          totalCount,
+        });
+      }
+    }
+
+    if (parsed.apiKey && sessionOptions.model) {
+      authStorage.setRuntimeApiKey(sessionOptions.model.provider, parsed.apiKey);
+    }
+
+    const created = await createAgentSessionFromServices({
+      services,
+      sessionManager,
+      sessionStartEvent,
+      model: sessionOptions.model,
+      thinkingLevel: sessionOptions.thinkingLevel,
+      scopedModels: sessionOptions.scopedModels,
+      tools: sessionOptions.tools,
+      noTools: sessionOptions.noTools,
+    });
+
+    return { ...created, services };
+  };
+}
+
 export async function main(args: string[]) {
   const parsed = parseArgs(args);
   if (parsed.help) {
@@ -255,64 +401,49 @@ export async function main(args: string[]) {
   const sessionManager = await createSessionManager(parsed, cwd, sessionDir, startupSettingsManager);
 
   const authStorage = AuthStorage.create();
-  const runtime = await createAgentSessionRuntime(
-    async ({ sessionManager, sessionStartEvent }) => {
-      const services = await createAgentSessionServices({
-        cwd,
-        agentDir,
-        authStorage,
-        resourceLoaderOptions: {
-          additionalExtensionPaths: parsed.extensions,
-          additionalSkillPaths: parsed.skills,
-          additionalPromptTemplatePaths: parsed.promptTemplates,
-          additionalThemePaths: parsed.themes,
-          noExtensions: parsed.noExtensions,
-          noSkills: parsed.noSkills,
-          noPromptTemplates: parsed.noPromptTemplates,
-          noThemes: parsed.noThemes,
-          noContextFiles: parsed.noContextFiles,
-          systemPrompt: parsed.systemPrompt,
-          appendSystemPrompt: parsed.appendSystemPrompt,
-        },
-        extensionFlagValues: parsed.unknownFlags,
+  const createRuntime = createMainRuntimeFactory({ cwd, agentDir, authStorage, parsed });
+
+  if (appMode === "interactive") {
+    initTheme(startupSettingsManager.getTheme(), true);
+    runtimeLoading();
+
+    void createAgentSessionRuntime(
+      createMainRuntimeFactory({ cwd, agentDir, authStorage, parsed }),
+      { cwd, agentDir, sessionManager },
+    )
+      .then((runtime) => {
+        runtimeReady({
+          runtime,
+        });
+      })
+      .catch((error) => {
+        const diagnostic = errorDiagnostic(error);
+        runtimeFailed({
+          diagnostics: [diagnostic],
+        });
       });
 
-      const { settingsManager, modelRegistry } = services;
-      await modelRegistry.refreshDynamic();
-      const modelPatterns = parsed.models ?? settingsManager.getEnabledModels();
-      const scopedModels = modelPatterns ? await resolveModelScope(modelPatterns, modelRegistry) : [];
+    const interactiveMode = new InteractiveMode({
+      initialMessages: parsed.messages,
+      verbose: parsed.verbose,
+    });
+    await interactiveMode.run();
+    return;
+  }
 
-      const { options: sessionOptions, diagnostics } = buildSessionOptions(
-        parsed,
-        scopedModels,
-        sessionManager.buildSessionContext().messages.length > 0,
-        modelRegistry,
-        settingsManager,
-      );
+  runtimeLoading();
+  let runtime: Awaited<ReturnType<typeof createAgentSessionRuntime>>;
+  try {
+    runtime = await createAgentSessionRuntime(createRuntime, { cwd, agentDir, sessionManager });
+    runtimeReady({ runtime });
+  } catch (error) {
+    const diagnostic = errorDiagnostic(error);
+    runtimeFailed({ diagnostics: [diagnostic] });
+    throw error;
+  }
 
-      if (parsed.apiKey && sessionOptions.model) {
-        authStorage.setRuntimeApiKey(sessionOptions.model.provider, parsed.apiKey);
-      }
-
-      const created = await createAgentSessionFromServices({
-        services,
-        sessionManager,
-        sessionStartEvent,
-        model: sessionOptions.model,
-        thinkingLevel: sessionOptions.thinkingLevel,
-        scopedModels: sessionOptions.scopedModels,
-        tools: sessionOptions.tools,
-        noTools: sessionOptions.noTools,
-      });
-
-      return { ...created, services, diagnostics };
-    },
-    { cwd, agentDir, sessionManager },
-  );
-
-  const { session, modelFallbackMessage } = runtime;
   const { settingsManager, modelRegistry } = runtime.services;
-  const runtimeDiagnostics = [...runtime.services.diagnostics, ...(runtime.diagnostics ?? [])];
+  const runtimeDiagnostics = collectStateDiagnostics();
   if (runtimeDiagnostics.length > 0) {
     reportDiagnostics(runtimeDiagnostics);
     if (runtimeDiagnostics.some((diagnostic) => diagnostic.type === "error")) {
@@ -326,7 +457,6 @@ export async function main(args: string[]) {
   }
 
   const stdinContent = await readPipedStdin();
-  if (stdinContent !== undefined && appMode === "interactive") appMode = "print";
 
   const { initialMessage, initialImages } = await prepareInitialMessage(
     parsed,
@@ -334,19 +464,10 @@ export async function main(args: string[]) {
     stdinContent,
   );
 
-  initTheme(settingsManager.getTheme(), appMode === "interactive");
+  initTheme(settingsManager.getTheme(), false);
 
   if (appMode === "rpc") {
     await runRpcMode(runtime);
-  } else if (appMode === "interactive") {
-    const interactiveMode = new InteractiveMode(runtime as any, {
-      modelFallbackMessage,
-      initialMessage,
-      initialImages: initialImages as any,
-      initialMessages: parsed.messages,
-      verbose: parsed.verbose,
-    });
-    await interactiveMode.run();
   } else {
     const exitCode = await runPrintMode(runtime as any, {
       mode: toPrintOutputMode(appMode),

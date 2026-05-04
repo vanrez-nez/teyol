@@ -5,6 +5,7 @@ import { dirname, join } from "node:path";
 import lockfile from "proper-lockfile";
 import { getAgentDir } from "../../config.js";
 import { LOG_LEVELS, type LogLevel, type LogMode } from "#logger";
+import { settingsFailed, settingsReady } from "#shell/state/index.js";
 
 export interface CompactionSettings {
 	enabled?: boolean; // default: true
@@ -154,11 +155,6 @@ export interface SettingsStorage {
 	withLock(scope: SettingsScope, fn: (current: string | undefined) => string | undefined): void;
 }
 
-export interface SettingsError {
-	scope: SettingsScope;
-	error: Error;
-}
-
 export class FileSettingsStorage implements SettingsStorage {
 	private settingsPath: string;
 
@@ -244,18 +240,15 @@ export class SettingsManager {
 	private modifiedNestedFields = new Map<keyof Settings, Set<string>>();
 	private settingsLoadError: Error | null = null;
 	private writeQueue: Promise<void> = Promise.resolve();
-	private errors: SettingsError[];
 
 	private constructor(
 		storage: SettingsStorage,
 		initialSettings: Settings,
 		settingsLoadError: Error | null = null,
-		initialErrors: SettingsError[] = [],
 	) {
 		this.storage = storage;
 		this.globalSettings = initialSettings;
 		this.settingsLoadError = settingsLoadError;
-		this.errors = [...initialErrors];
 		this.settings = structuredClone(this.globalSettings);
 	}
 
@@ -268,12 +261,15 @@ export class SettingsManager {
 	/** Create a SettingsManager from an arbitrary storage backend */
 	static fromStorage(storage: SettingsStorage): SettingsManager {
 		const settingsLoad = SettingsManager.tryLoadFromStorage(storage, "user");
-		const initialErrors: SettingsError[] = [];
 		if (settingsLoad.error) {
-			initialErrors.push({ scope: "user", error: settingsLoad.error });
+			settingsFailed({
+				diagnostics: [{ type: "warning", message: `(user settings) ${settingsLoad.error.message}` }],
+			});
+		} else {
+			settingsReady();
 		}
 
-		return new SettingsManager(storage, settingsLoad.settings, settingsLoad.error, initialErrors);
+		return new SettingsManager(storage, settingsLoad.settings, settingsLoad.error);
 	}
 
 	/** Create an in-memory SettingsManager (no file I/O) */
@@ -408,7 +404,9 @@ export class SettingsManager {
 
 	private recordError(scope: SettingsScope, error: unknown): void {
 		const normalizedError = error instanceof Error ? error : new Error(String(error));
-		this.errors.push({ scope, error: normalizedError });
+		settingsFailed({
+			diagnostics: [{ type: "warning", message: `(${scope} settings) ${normalizedError.message}` }],
+		});
 	}
 
 	private clearModified(): void {
@@ -483,12 +481,6 @@ export class SettingsManager {
 
 	async flush(): Promise<void> {
 		await this.writeQueue;
-	}
-
-	drainErrors(): SettingsError[] {
-		const drained = [...this.errors];
-		this.errors = [];
-		return drained;
 	}
 
 	getSessionDir(): string | undefined {
