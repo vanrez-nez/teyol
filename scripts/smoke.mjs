@@ -40,7 +40,9 @@ import {
 	AssistantMessageBlock,
 	AssistantToolBlock,
 	CompactionSummaryBlock,
+	CustomMessageBlock,
 	LoadedResourcesBlock,
+	SkillInvocationBlock,
 	TimelineBlock,
 	UserMessageBlock,
 } from "../dist/shell/tui/components/index.js";
@@ -592,6 +594,9 @@ function createTimelineForTest(options = {}) {
 		sessionManager: {
 			getCwd: () => repoRoot,
 		},
+		extensionRunner: {
+			getMessageRenderer: options.getMessageRenderer ?? (() => undefined),
+		},
 	};
 	const timeline = new Timeline(chatContainer, options.timelineOptions ?? options);
 	const composition = new TimelineComposition({
@@ -824,6 +829,61 @@ function testTimelineCompactionSummaryBlock() {
 	composition.setDetailsExpanded(true);
 	const expanded = timeline.render(100).join("\n");
 	assert.match(expanded, /summary text/);
+}
+
+function createCustomMessageFixture(overrides = {}) {
+	return {
+		role: "custom",
+		customType: overrides.customType ?? "demo",
+		content: overrides.content ?? "custom **message**",
+		display: overrides.display ?? true,
+		details: overrides.details,
+		timestamp: overrides.timestamp ?? 1710000000000,
+	};
+}
+
+function testCustomMessageBlock() {
+	initTheme("dark", false);
+	const message = createCustomMessageFixture();
+	const block = new CustomMessageBlock({
+		id: "custom-1",
+		message,
+		expanded: false,
+	});
+
+	const rendered = block.render(100).join("\n");
+	assert.match(rendered, /\[demo\]/);
+	assert.match(rendered, /custom/);
+	assert.match(rendered, /message/);
+	assert.deepEqual(block.serialize(), {
+		type: "custom-message",
+		id: "custom-1",
+		state: {
+			message,
+			expanded: false,
+		},
+	});
+
+	const rendererBlock = new CustomMessageBlock({
+		id: "custom-renderer-1",
+		message,
+		expanded: true,
+		renderer(_message, options) {
+			return new Text(`expanded:${options.expanded}`, 0, 0);
+		},
+	});
+	assert.match(rendererBlock.render(100).join("\n"), /expanded:true/);
+}
+
+function testTimelineCustomMessageBlock() {
+	initTheme("dark", false);
+	const { timeline, composition, chatContainer } = createTimelineForTest();
+	composition.addMessage(createCustomMessageFixture());
+
+	assert.equal(chatContainer.children.length, 1);
+	assert.equal(timeline.getBlockCount(), 1);
+	assert.match(timeline.render(100).join("\n"), /\[demo\]/);
+	assert.match(timeline.render(100).join("\n"), /custom/);
 }
 
 function testLoadedResourcesBlock() {
@@ -1155,6 +1215,53 @@ function testUserMessageBlock() {
 	});
 }
 
+function createParsedSkillBlockFixture(overrides = {}) {
+	return {
+		name: overrides.name ?? "demo",
+		location: overrides.location ?? "/tmp/demo",
+		content: overrides.content ?? "skill **body**",
+		userMessage: overrides.userMessage,
+	};
+}
+
+function testSkillInvocationBlock() {
+	initTheme("dark", false);
+	const skillBlock = createParsedSkillBlockFixture();
+	const block = new SkillInvocationBlock({
+		id: "skill-1",
+		skillBlock,
+		expanded: false,
+	});
+
+	const collapsed = block.render(100).join("\n");
+	assert.match(collapsed, /\[skill\]/);
+	assert.match(collapsed, /demo/);
+	assert.match(collapsed, /to expand/);
+	assert.doesNotMatch(collapsed, /skill body/);
+	assert.deepEqual(block.serialize(), {
+		type: "skill-invocation",
+		id: "skill-1",
+		state: {
+			skillBlock,
+			expanded: false,
+		},
+	});
+
+	block.setDetailsExpanded(true);
+	const expanded = block.render(100).join("\n");
+	assert.match(expanded, /demo/);
+	assert.match(expanded, /skill/);
+	assert.match(expanded, /body/);
+	assert.deepEqual(block.serialize(), {
+		type: "skill-invocation",
+		id: "skill-1",
+		state: {
+			skillBlock,
+			expanded: true,
+		},
+	});
+}
+
 function testTimelineUserMessageBlocks() {
 	initTheme("dark", false);
 	const history = [];
@@ -1181,7 +1288,15 @@ function testTimelineSkillBlockTrailingUserMessage() {
 		timestamp: Date.now(),
 	});
 
-	assert.match(timeline.render(80).join("\n"), /continue here/);
+	assert.equal(timeline.getBlockCount(), 2);
+	const collapsed = timeline.render(80).join("\n");
+	assert.match(collapsed, /\[skill\]/);
+	assert.match(collapsed, /demo/);
+	assert.match(collapsed, /continue here/);
+	assert.doesNotMatch(collapsed, /body/);
+
+	composition.setDetailsExpanded(true);
+	assert.match(timeline.render(80).join("\n"), /body/);
 }
 
 function testShellLayoutNarrowWidth() {
@@ -1343,6 +1458,8 @@ testTimelineBlockRendering();
 testTimelineStartupBlocks();
 testCompactionSummaryBlock();
 testTimelineCompactionSummaryBlock();
+testCustomMessageBlock();
+testTimelineCustomMessageBlock();
 testLoadedResourcesBlock();
 testShowLoadedResourcesBuildsBlock();
 testShowLoadedResourcesDiagnosticsWhenQuiet();
@@ -1357,6 +1474,7 @@ testTimelineAssistantToolEvents();
 testTimelineAssistantToolEventsUseExpandedSetting();
 testTimelineAssistantHiddenThinkingLabel();
 testUserMessageBlock();
+testSkillInvocationBlock();
 testTimelineUserMessageBlocks();
 testTimelineSkillBlockTrailingUserMessage();
 testShellLayoutNarrowWidth();

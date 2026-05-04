@@ -8,15 +8,15 @@ import type { Component, Container, EditorComponent, MarkdownTheme, TUI } from "
 import { Spacer, Text, TruncatedText } from "#tui/index.js";
 import { APP_NAME } from "../../config.js";
 import { theme } from "../theme/theme.js";
-import { CustomMessageComponent } from "./components/custom-message.js";
 import { DynamicBorder } from "./components/dynamic-border.js";
 import { keyText } from "./components/keybinding-hints.js";
-import { SkillInvocationMessageComponent } from "./components/skill-invocation-message.js";
 import { AssistantMessageBlock, type AssistantMessageBlockOptions } from "./components/timeline/assistant-message-block.js";
 import { CompactionSummaryBlock } from "./components/timeline/compaction-summary-block.js";
+import { CustomMessageBlock } from "./components/timeline/custom-message-block.js";
 import { LoadedResourcesBlock } from "./components/timeline/loaded-resources-block.js";
 import type { TimelineBlock } from "./components/timeline/base-block.js";
 import { LogoBlock } from "./components/timeline/logo-block.js";
+import { SkillInvocationBlock } from "./components/timeline/skill-invocation-block.js";
 import { StartupBlock } from "./components/timeline/startup-block.js";
 import { UserMessageBlock } from "./components/timeline/user-message-block.js";
 import { formatAppKeyDisplay, getUserMessageText } from "./display-helpers.js";
@@ -192,14 +192,20 @@ export class TimelineComposition {
 	}
 
 	addMessage(message: AgentMessage, options?: { populateHistory?: boolean }): void {
-		const { chatContainer, state } = this.dependencies;
+		const { state } = this.dependencies;
 		switch (message.role) {
 			case "custom": {
 				if (message.display) {
 					const renderer = this.dependencies.getSession().extensionRunner.getMessageRenderer(message.customType);
-					const component = new CustomMessageComponent(message, renderer, this.dependencies.getMarkdownTheme());
-					component.setDetailsExpanded(state.shell.$detailsExpanded.getState());
-					chatContainer.addChild(component);
+					this.dependencies.timeline.pushBlock(
+						new CustomMessageBlock({
+							message,
+							renderer,
+							markdownTheme: this.dependencies.getMarkdownTheme(),
+							expanded: state.shell.$detailsExpanded.getState(),
+							margin: { top: this.dependencies.timeline.getBlockCount() > 0 ? 1 : 0 },
+						}),
+					);
 				}
 				break;
 			}
@@ -218,9 +224,14 @@ export class TimelineComposition {
 				if (textContent) {
 					const skillBlock = parseSkillBlock(textContent);
 					if (skillBlock) {
-						const component = new SkillInvocationMessageComponent(skillBlock, this.dependencies.getMarkdownTheme());
-						component.setDetailsExpanded(state.shell.$detailsExpanded.getState());
-						chatContainer.addChild(component);
+						this.dependencies.timeline.pushBlock(
+							new SkillInvocationBlock({
+								skillBlock,
+								markdownTheme: this.dependencies.getMarkdownTheme(),
+								expanded: state.shell.$detailsExpanded.getState(),
+								margin: { top: this.dependencies.timeline.getBlockCount() > 0 ? 1 : 0 },
+							}),
+						);
 						if (skillBlock.userMessage) {
 							this.pushUserMessageBlock(skillBlock.userMessage);
 						}
@@ -346,7 +357,9 @@ export class TimelineComposition {
 			if (
 				block instanceof StartupBlock ||
 				block instanceof LoadedResourcesBlock ||
-				block instanceof CompactionSummaryBlock
+				block instanceof CompactionSummaryBlock ||
+				block instanceof CustomMessageBlock ||
+				block instanceof SkillInvocationBlock
 			) {
 				block.setDetailsExpanded(expanded);
 			}
