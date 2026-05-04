@@ -2,10 +2,7 @@
  * TUI session selector for --resume flag
  */
 
-import { ProcessTerminal, setKeybindings, TUI } from "#tui/index.js";
-import { KeybindingsManager } from "#shell/runtime/keybindings.js";
 import type { SessionInfo, SessionListProgress } from "#shell/runtime/session-manager.js";
-import { SessionSelectorComponent } from "#shell/tui/components/session-selector.js";
 
 type SessionsLoader = (onProgress?: SessionListProgress) => Promise<SessionInfo[]>;
 
@@ -14,6 +11,13 @@ export async function selectSession(
 	currentSessionsLoader: SessionsLoader,
 	allSessionsLoader: SessionsLoader,
 ): Promise<string | null> {
+	void currentSessionsLoader;
+	void allSessionsLoader;
+	console.error("Interactive session selector is disabled during the Ink TUI migration.");
+	return null;
+	/*
+	OLD CUSTOM TUI IMPLEMENTATION DISABLED DURING INK MIGRATION.
+
 	return new Promise((resolve) => {
 		const ui = new TUI(new ProcessTerminal());
 		const keybindings = KeybindingsManager.create();
@@ -49,4 +53,5 @@ export async function selectSession(
 		ui.setFocus(selector.getSessionList());
 		ui.start();
 	});
+	*/
 }

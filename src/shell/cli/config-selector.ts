@@ -2,11 +2,8 @@
  * TUI config selector for `teyol config` command
  */
 
-import { ProcessTerminal, TUI } from "#tui/index.js";
 import type { ResolvedPaths } from "#shell/runtime/package-manager.js";
 import type { SettingsManager } from "#shell/runtime/settings-manager.js";
-import { ConfigSelectorComponent } from "#shell/tui/components/config-selector.js";
-import { initTheme, stopThemeWatcher } from "#shell/theme/theme.js";
 
 export interface ConfigSelectorOptions {
 	resolvedPaths: ResolvedPaths;
@@ -17,6 +14,12 @@ export interface ConfigSelectorOptions {
 
 /** Show TUI config selector and return when closed */
 export async function selectConfig(options: ConfigSelectorOptions): Promise<void> {
+	void options;
+	console.error("Interactive config selector is disabled during the Ink TUI migration.");
+	return;
+	/*
+	OLD CUSTOM TUI IMPLEMENTATION DISABLED DURING INK MIGRATION.
+
 	// Initialize theme before showing TUI
 	initTheme(options.settingsManager.getTheme(), true);
 
@@ -49,4 +52,5 @@ export async function selectConfig(options: ConfigSelectorOptions): Promise<void
 		ui.setFocus(selector.getResourceList());
 		ui.start();
 	});
+	*/
 }
