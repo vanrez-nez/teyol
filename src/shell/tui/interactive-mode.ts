@@ -1,4 +1,4 @@
-import { renderHelloWorldApp } from "#tui/index.js";
+import { renderTuiApp } from "#tui/index.js";
 import type { AgentSessionRuntime } from "#shell/runtime/agent-session-runtime.js";
 
 export interface InteractiveModeOptions {
@@ -18,6 +18,6 @@ export class InteractiveMode {
 	async run(): Promise<void> {
 		void this.runtimeHost;
 		void this.options;
-		await renderHelloWorldApp();
+		await renderTuiApp();
 	}
 }

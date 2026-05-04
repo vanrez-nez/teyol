@@ -15,7 +15,7 @@
     "#ai/*": "./dist/ai/*",
     "#agent/*": "./dist/agent/*",
     "#logger": "./dist/logger.js",
-    "#tui/*": "./dist/tui/*",
+    "#tui/*": "./dist/shell/tui/*",
     "#shell/*": "./dist/shell/*",
     "#cli/*": "./dist/cli/*"
   },

@@ -1,13 +1,16 @@
 import React from "react";
-import { render, Text } from "ink";
+import { render } from "ink";
 import { setTimeout as delay } from "node:timers/promises";
+import { Layout } from "./components/layout.js";
 
-export function HelloWorldApp() {
-	return React.createElement(Text, null, "hello world");
+export * from "./components/index.js";
+
+export function TuiApp() {
+	return React.createElement(Layout);
 }
 
-export async function renderHelloWorldApp(): Promise<void> {
-	const instance = render(React.createElement(HelloWorldApp));
+export async function renderTuiApp(): Promise<void> {
+	const instance = render(React.createElement(TuiApp));
 	await delay(0);
 	instance.unmount();
 	await instance.waitUntilExit();
